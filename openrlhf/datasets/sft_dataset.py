@@ -177,7 +177,7 @@ class SFTDataset(Dataset):
         if not self.pretrain_mode:
             text = (prompt + response).rstrip("\n")
             if not text.endswith(self.tokenizer.eos_token):
-                text += " " + self.tokenizer.eos_token
+                text += self.tokenizer.eos_token
         else:
             text = prompt
 
