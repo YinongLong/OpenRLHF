@@ -63,6 +63,7 @@ def train(args):
         pretrain_mode=args.pretrain_mode,
         input_template=args.input_template,
         multiturn=args.multiturn,
+        num_processors=args.num_processors
     )
     # prepare dataloader
     train_dataloader = strategy.setup_dataloader(
@@ -89,6 +90,7 @@ def train(args):
             pretrain_mode=args.pretrain_mode,
             input_template=args.input_template,
             multiturn=args.multiturn,
+            num_processors=args.num_processors
         )
         eval_dataloader = strategy.setup_dataloader(
             eval_dataset,
@@ -220,6 +222,7 @@ if __name__ == "__main__":
 
     # custom dataset
     parser.add_argument("--composite_tokens", type=str, default=None, help="Path to the custom composite tokens")
+    parser.add_argument("--num_processors", type=int, default=8, help="the number of processors using to load dataset")
     parser.add_argument("--dataset", type=str, default=None, help="Path to the training dataset")
     parser.add_argument("--dataset_probs", type=str, default=None, help="Sampling probabilities for training datasets")
     parser.add_argument("--eval_dataset", type=str, default=None, help="Path to the evaluation dataset")
