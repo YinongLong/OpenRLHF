@@ -219,6 +219,7 @@ if __name__ == "__main__":
     parser.add_argument("--packing_samples", action="store_true", default=False)
 
     # custom dataset
+    parser.add_argument("--composite_tokens", type=str, default=None, help="Path to the custom composite tokens")
     parser.add_argument("--dataset", type=str, default=None, help="Path to the training dataset")
     parser.add_argument("--dataset_probs", type=str, default=None, help="Sampling probabilities for training datasets")
     parser.add_argument("--eval_dataset", type=str, default=None, help="Path to the evaluation dataset")

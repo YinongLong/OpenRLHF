@@ -21,6 +21,40 @@ def get_strategy(args):
     return strategy
 
 
+def add_composite_tokens(tokenizer, model, strategy, pad_to_multiple_of=8):
+    """
+    根据配置信息添加合成token，即使用多个token的合并作为独立一个token
+    """
+    data_path = getattr(strategy.args, 'composite_tokens', None)
+    if data_path is None:
+        return
+
+    import io
+
+    composite_tokens = set()
+    with io.open(data_path, mode='r', encoding='utf-8') as data_file:
+        for line in data_file:
+            c_token = line.strip()
+            if not c_token:
+                continue
+            tids = tokenizer.encode(c_token)
+            if len(tids) == 1:
+                continue
+            composite_tokens.add(c_token)
+    composite_tokens = list(composite_tokens)
+    if not composite_tokens:
+        return
+    print(f'found {len(composite_tokens)} extra composite tokens', flush=True)
+    for c_token in composite_tokens:
+        tokenizer.add_tokens(c_token)
+
+    ori_num = model.get_input_embeddings().weight.shape[0]
+    new_num = len(tokenizer)
+    if ori_num < new_num:  # Qwen系列模型在Embedding上留出冗余的空间，所以不需要resize
+        print('!!!!!!resizing token embeddings!!!!!!')
+        model.resize_token_embeddings(new_num, pad_to_multiple_of)
+
+
 def get_tokenizer(pretrain, model, padding_side="left", strategy=None, use_fast=True):
     tokenizer = AutoTokenizer.from_pretrained(pretrain, trust_remote_code=True, use_fast=use_fast)
     tokenizer.padding_side = padding_side
@@ -31,6 +65,8 @@ def get_tokenizer(pretrain, model, padding_side="left", strategy=None, use_fast=
         tokenizer.pad_token_id = tokenizer.eos_token_id
         if model is not None:
             model.config.pad_token_id = tokenizer.pad_token_id
+
+    add_composite_tokens(tokenizer, model, strategy)
 
     return tokenizer
 
