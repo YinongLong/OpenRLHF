@@ -59,7 +59,6 @@ class FuserDataset(Dataset):
         self.completions = processed_dataset["completion"]
         self.prefix_ids_lens = processed_dataset["prefix_ids_len"]
         self.flag_ids_lens = processed_dataset["flag_ids_len"]
-        self.lead_ids_lens = processed_dataset["lead_ids_len"]
 
     def process_data(self, data):
         prefix, flag, lead, completion = preprocess_data(
@@ -127,7 +126,6 @@ class FuserDataset(Dataset):
             "completion": completion,
             "prefix_ids_len": prefix_ids_len,
             "flag_ids_len": flag_ids_len,
-            "lead_ids_len": lead_ids_len
         }
 
     def __len__(self):
@@ -171,10 +169,9 @@ class FuserDataset(Dataset):
         comp_loss_mask = torch.zeros_like(input_ids, dtype=torch.float32)
         prefix_ids_len = self.prefix_ids_lens[idx]
         flag_ids_len = self.flag_ids_lens[idx]
-        lead_ids_len = self.lead_ids_lens[idx]
 
         flag_loss_mask[0, (prefix_ids_len - 1) : (prefix_ids_len + flag_ids_len - 1)] = 1
-        comp_loss_mask[0, (prefix_ids_len + flag_ids_len + lead_ids_len - 1) : -1] = 1
+        comp_loss_mask[0, (prefix_ids_len + flag_ids_len - 1) : -1] = 1
         return flag_loss_mask, comp_loss_mask
 
     def collate_fn(self, item_list):
