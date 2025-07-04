@@ -140,7 +140,7 @@ class RewardDataset(Dataset):
 
         chosen = (prompt + chosen).rstrip("\n")
         if not chosen.endswith(self.tokenizer.eos_token):
-            chosen += " " + self.tokenizer.eos_token
+            chosen += self.tokenizer.eos_token
         chosen_token = self.tokenizer(
             chosen,
             max_length=self.max_length,
@@ -152,7 +152,7 @@ class RewardDataset(Dataset):
 
         reject = (prompt + reject).rstrip("\n")
         if not reject.endswith(self.tokenizer.eos_token):
-            reject += " " + self.tokenizer.eos_token
+            reject += self.tokenizer.eos_token
         reject_token = self.tokenizer(
             reject,
             max_length=self.max_length,
