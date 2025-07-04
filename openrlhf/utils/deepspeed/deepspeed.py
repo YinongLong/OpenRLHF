@@ -172,6 +172,7 @@ class DeepspeedStrategy(ABC):
         if sampler is None and dist.is_initialized():
             dp_group = self.ds_device_mesh["dp"].get_group()
             num_replicas = dist.get_world_size(group=dp_group)
+            self.print(f"Set `DistributedSampler` with {num_replicas=}")
             rank = dist.get_rank(group=dp_group)
 
             sampler = DistributedSampler(
