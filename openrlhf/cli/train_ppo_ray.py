@@ -6,12 +6,12 @@ from ray.util.placement_group import placement_group
 
 from openrlhf.trainer.ray import create_vllm_engines
 from openrlhf.trainer.ray.launcher import (
-    PPORayActorGroup,
-    ReferenceModelRayActor,
-    RewardModelRayActor,
+    RayActorGroup,
+    ReferenceModelActor,
+    RewardModelActor,
 )
-from openrlhf.trainer.ray.ppo_actor import ActorModelRayActor
-from openrlhf.trainer.ray.ppo_critic import CriticModelRayActor
+from openrlhf.trainer.ray.ppo_actor import PolicyModelActor
+from openrlhf.trainer.ray.ppo_critic import CriticModelActor
 from openrlhf.utils import get_strategy
 
 
@@ -73,10 +73,10 @@ def train(args):
             args.agent_func_path,
         )
 
-    actor_model = PPORayActorGroup(
+    actor_model = RayActorGroup(
         args.actor_num_nodes,
         args.actor_num_gpus_per_node,
-        ActorModelRayActor,
+        PolicyModelActor,
         pg=pg,
         num_gpus_per_actor=0.2 if pg else 1,
         duplicate_actors=args.ring_attn_size * args.ds_tensor_parallel_size,
@@ -85,10 +85,10 @@ def train(args):
     if args.init_kl_coef <= 0:
         ref_model = None
     else:
-        ref_model = PPORayActorGroup(
+        ref_model = RayActorGroup(
             args.ref_num_nodes,
             args.ref_num_gpus_per_node,
-            ReferenceModelRayActor,
+            ReferenceModelActor,
             pg=pg,
             num_gpus_per_actor=0.2 if pg else 1,
             duplicate_actors=args.ring_attn_size * args.ds_tensor_parallel_size,
@@ -109,10 +109,10 @@ def train(args):
         ray.get(pg.ready())
 
     if args.critic_pretrain:
-        critic_model = PPORayActorGroup(
+        critic_model = RayActorGroup(
             args.critic_num_nodes,
             args.critic_num_gpus_per_node,
-            CriticModelRayActor,
+            CriticModelActor,
             pg=pg,
             num_gpus_per_actor=0.2 if pg else 1,
             duplicate_actors=args.ring_attn_size * args.ds_tensor_parallel_size,
@@ -123,10 +123,10 @@ def train(args):
     # multiple reward models
     if not args.remote_rm_url:
         reward_pretrain = args.reward_pretrain
-        reward_model = PPORayActorGroup(
+        reward_model = RayActorGroup(
             args.reward_num_nodes,
             args.reward_num_gpus_per_node,
-            RewardModelRayActor,
+            RewardModelActor,
             pg=pg,
             num_gpus_per_actor=0.2 if pg else 1,
             duplicate_actors=args.ring_attn_size * args.ds_tensor_parallel_size,
@@ -292,6 +292,11 @@ if __name__ == "__main__":
     # packing samples using Flash Attention2
     parser.add_argument("--packing_samples", action="store_true", default=False)
 
+    # dynamic batch size
+    parser.add_argument("--use_dynamic_batch", action="store_true", default=False)
+    parser.add_argument("--rollout_max_tokens_per_gpu", type=int, default=None)
+    parser.add_argument("--train_max_tokens_per_gpu", type=int, default=16192)
+
     # LoRA
     parser.add_argument("--load_in_4bit", action="store_true", default=False)
     parser.add_argument("--lora_rank", type=int, default=0)
@@ -317,6 +322,7 @@ if __name__ == "__main__":
     parser.add_argument("--ptx_coef", type=float, default=0.05, help="PPO-ptx loss coef")
     parser.add_argument("--eps_clip", type=float, default=0.2, help="PPO clip range")
     parser.add_argument("--eps_clip_low_high", type=float, nargs=2, default=None, help="PPO-clip low and high")
+    parser.add_argument("--dual_clip", type=float, default=None, help="Dual-clip PPO")
     parser.add_argument("--value_clip", type=float, default=0.5, help="PPO value clip range")
     parser.add_argument("--lambd", type=float, default=1, help="PPO GAE lambd")
     parser.add_argument("--gamma", type=float, default=1, help="PPO GAE gamma")
@@ -340,9 +346,11 @@ if __name__ == "__main__":
     parser.add_argument("--actor_learning_rate", type=float, default=1e-6)
     parser.add_argument("--critic_learning_rate", type=float, default=9e-6)
     parser.add_argument("--lr_warmup_ratio", type=float, default=0.03)
+    parser.add_argument("--lr_scheduler", type=str, default="cosine_with_min_lr")
     parser.add_argument("--kl_target", type=float, default=None)
     parser.add_argument("--kl_horizon", type=int, default=10000)
     parser.add_argument("--init_kl_coef", type=float, default=0.01, help="KL penalty in PPO")
+    parser.add_argument("--policy_loss_type", type=str, default="ppo", choices=["ppo", "gspo"])
     parser.add_argument(
         "--kl_estimator",
         type=str,
@@ -377,6 +385,10 @@ if __name__ == "__main__":
         default=False,
         help="disable dividing by std for advantages while keeping mean normalization",
     )
+    parser.add_argument(
+        "--overlong_buffer_len", type=float, default=None, help="reward with optional overlong penalty"
+    )
+    parser.add_argument("--overlong_penalty_factor", type=float, default=1, help="overlong penalty factor")
 
     # Context Parallel
     parser.add_argument("--ring_attn_size", type=int, default=1, help="Ring attention group size")
@@ -479,6 +491,19 @@ if __name__ == "__main__":
             "[Warning] input_template contains \\n chracters instead of newline. "
             "You likely want to pass $'\\n' in Bash or \"`n\" in PowerShell."
         )
+
+    if args.ring_attn_size > 1:
+        if not args.packing_samples:
+            print("[Warning] --ring_attn_size > 1 requires --packing_samples.")
+            args.packing_samples = True
+
+    if args.use_dynamic_batch:
+        if not args.packing_samples:
+            print("[Warning] Please --packing_samples to accelerate when --use_dynamic_batch is enabled.")
+            args.packing_samples = True
+        if args.rollout_max_tokens_per_gpu is None:
+            print("[Warning] Set --rollout_max_tokens_per_gpu to --train_max_tokens_per_gpu.")
+            args.rollout_max_tokens_per_gpu = args.train_max_tokens_per_gpu
 
     if args.packing_samples:
         if not args.flash_attn:

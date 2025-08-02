@@ -54,6 +54,12 @@ class BaseLLMRayActor:
 
         self.kwargs = kwargs
 
+        import vllm
+        from packaging import version
+
+        if version.parse(vllm.__version__) >= version.parse("0.9.0"):
+            os.environ["VLLM_ALLOW_INSECURE_SERIALIZATION"] = "1"
+
 
 @ray.remote
 class LLMRayActor(BaseLLMRayActor):
@@ -119,8 +125,9 @@ def create_vllm_engines(
     agent_func_path=None,
 ):
     import vllm
+    from packaging import version
 
-    assert vllm.__version__ > "0.8.2", "OpenRLHF only supports vllm > 0.8.2"
+    assert version.parse(vllm.__version__) > version.parse("0.8.2"), "OpenRLHF only supports vllm > 0.8.2"
 
     vllm_engines = []
     distributed_executor_backend = "uni" if tensor_parallel_size == 1 else "ray"

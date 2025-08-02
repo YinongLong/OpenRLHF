@@ -37,6 +37,7 @@ def compute_approx_kl(
         log_ratio = -log_ratio
         log_ratio = log_ratio.exp() - 1 - log_ratio
 
+    log_ratio = log_ratio.clamp(min=-10, max=10)
     return log_ratio
 
 
@@ -122,6 +123,7 @@ def masked_normalize(tensor: torch.Tensor, mask: torch.Tensor, dim: int = 1, eps
     return mean_centered * var.clamp(min=eps).rsqrt()
 
 
+@torch.compile
 def compute_entropy(logits: torch.Tensor):
     pd = torch.nn.functional.softmax(logits, dim=-1)
     entropy = torch.logsumexp(logits, dim=-1) - torch.sum(pd * logits, dim=-1)

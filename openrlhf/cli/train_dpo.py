@@ -118,11 +118,11 @@ def train(args):
     max_steps = math.ceil(args.max_epochs * num_update_steps_per_epoch)
 
     scheduler = get_scheduler(
-        "cosine_with_min_lr",
+        args.lr_scheduler,
         optim,
         num_warmup_steps=math.ceil(max_steps * args.lr_warmup_ratio),
         num_training_steps=max_steps,
-        scheduler_specific_kwargs={"min_lr": args.learning_rate * 0.1},
+        scheduler_specific_kwargs={"min_lr": args.learning_rate * args.min_lr_ratio},
     )
 
     # strategy prepare
@@ -196,6 +196,7 @@ if __name__ == "__main__":
     parser.add_argument("--ref_offload", action="store_true", default=False)
     parser.add_argument("--learning_rate", type=float, default=1e-5)
     parser.add_argument("--lr_warmup_ratio", type=float, default=0.03)
+    parser.add_argument("--lr_scheduler", type=str, default="cosine_with_min_lr")
     parser.add_argument("--zpg", type=int, default=1, help="ZeRO++ max partition size")
     parser.add_argument("--adam_offload", action="store_true", default=False, help="Offload Adam Optimizer")
     parser.add_argument("--flash_attn", action="store_true", default=False, help="Enable FlashAttention2")
@@ -208,6 +209,12 @@ if __name__ == "__main__":
     # DPO
     parser.add_argument("--max_epochs", type=int, default=1)
     parser.add_argument("--l2", type=float, default=0.0, help="weight decay loss")
+    parser.add_argument(
+        "--min_lr_ratio",
+        type=float,
+        default=0.1,
+        help="Ratio of the minimum learning rate to the initial learning rate.",
+    )
     parser.add_argument("--beta", type=float, default=0.1)
     parser.add_argument("--ipo", action="store_true", default=False)  # IPO https://arxiv.org/pdf/2310.12036v2.pdf
     parser.add_argument("--label_smoothing", type=float, default=0.0)  # cDPO https://arxiv.org/pdf/2305.18290.pdf

@@ -20,6 +20,7 @@
       <a href="https://github.com/OpenRLHF/OpenRLHF/stargazers">
         <img alt="GitHub stars" src="https://img.shields.io/github/stars/OpenRLHF/OpenRLHF?color=ccf" />
       </a>
+      <a href="https://deepwiki.com/OpenRLHF/OpenRLHF"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
       <br>
       <em>开源 / 全面 / 轻量级 / 易用</em>
     </p>
@@ -42,11 +43,13 @@ OpenRLHF 是第一个基于 Ray、vLLM、ZeRO-3 和 HuggingFace Transformers 构
 - **优化的 PPO 实现**  
   集成了受实践指南和社区最佳实践启发的先进 PPO 技巧，提高了 RLHF 工作流程中的训练稳定性和奖励质量。参考 [知乎](https://zhuanlan.zhihu.com/p/622134699) 和 [Advanced Tricks for Training Large Language Models with Proximal Policy Optimization](https://hijkzzz.notion.site/rlhf-implementation-tricks?v=158d9a33ecc98132bf9e000c39227361)。
 
-更多细节请参考 [PPT](https://docs.google.com/presentation/d/1JRhB1d7csofx0PIZBmfyBdMluxNd5JLPpUHrrvVhGnk/edit?usp=sharing) | [技术报告](https://arxiv.org/abs/2405.11143) | [使用文档](https://openrlhf.readthedocs.io/)
+更多细节请参考 [PPT](https://docs.google.com/presentation/d/1JRhB1d7csofx0PIZBmfyBdMluxNd5JLPpUHrrvVhGnk/edit?usp=sharing) | [技术报告](https://www.researchgate.net/publication/393414548_OpenRLHF_An_Easy-to-use_Scalable_and_High-performance_RLHF_Framework) | [使用文档](https://openrlhf.readthedocs.io/)
 
 
 ## 新闻  
-- [2025/5] OpenRLHF 0.8.0 支持 [Async Pipeline RLHF](./examples/scripts/train_reinforce_baseline_llama_ray_async.sh) (`--async_train`) 和 [Async Agent RLHF](./examples/scripts/train_reinforce_baseline_llama_ray_agent_async.sh)(`--agent_func_path`)
+- [2025/6] [Magistral](https://mistral.ai/static/research/magistral.pdf) 使用极其类似于 REINFORCE++-baseline 的算法训练推理模型.
+- [2025/5] [MARTI](https://github.com/TsinghuaC3I/MARTI) 作为 OpenRLHF 的分支版本已发布。它通过集成集中式多智能体交互与分布式策略训练，专为使用 RL 训练基于 LLM 的多智能体系统而设计。
+- [2025/5] OpenRLHF 0.8.0 支持 [Async Pipeline RLHF](./examples/scripts/train_reinforce_baseline_llama_ray_async.sh) (`--async_train`) 和 [Async Agent RLHF](./examples/scripts/train_reinforce_baseline_llama_ray_agent_async.sh)(`--agent_func_path`) 以及重新设计的基于类的代理 API
 - [2025/4] 发布博客 [Accelerating RLHF with vLLM, Best Practice from OpenRLHF](https://blog.vllm.ai/2025/04/23/openrlhf-vllm.html)
 - [2025/4] Clean OpenRLHF: 基于 Single Controller 和 Unified Packing Samples 重构了源码
 - [2025/3] CMU的[2025春季高级自然语言处理课程](https://cmu-l3.github.io/anlp-spring2025/)使用OpenRLHF作为RLHF框架教学案例。
@@ -54,7 +57,7 @@ OpenRLHF 是第一个基于 Ray、vLLM、ZeRO-3 和 HuggingFace Transformers 构
 - [2025/2] [LMM-R1](https://github.com/TideDra/lmm-r1) 是 OpenRLHF 的一个分支，旨在为多模态任务上复现 DeepSeek-R1 提供高性能的 RL 基础设施。
 - [2025/2] MIT & Microsoft 提出了 [On the Emergence of Thinking in LLMs I: Searching for the Right Intuition](https://arxiv.org/pdf/2502.06773) 基于 OpenRLHF
 - [2025/1] 港科大复现了 [DeepSeek-R1-Zero and DeepSeek-R1 training on small models 使用 OpenRLHF](https://github.com/hkust-nlp/simpleRL-reason)
-- [2024/12] 我们"提出"了 😊 [REINFORCE++ 对齐算法](https://www.researchgate.net/publication/387487679_REINFORCE_A_SIMPLE_AND_EFFICIENT_APPROACH_FOR_ALIGNING_LARGE_LANGUAGE_MODELS).
+- [2024/12] 我们"提出"了 😊 [REINFORCE++: A Simple and Efficient Approach for Aligning Large Language Models](https://www.researchgate.net/publication/387487679_REINFORCE_An_Efficient_RLHF_Algorithm_with_Robustnessto_Both_Prompt_and_Reward_Models).
 - [2024/12] 在 [Notion Blog](https://hijkzzz.notion.site/unraveling-rlhf-and-its-variants-engineering-insights#147d9a33ecc9806090f3d5c749d31f05) 中，我们对 PPO、REINFORCE++、GRPO 和 RLOO 进行了分析。  
 - [2023/8] OpenRLHF 开启开源之旅. 
 
@@ -93,13 +96,13 @@ OpenRLHF 是第一个基于 Ray、vLLM、ZeRO-3 和 HuggingFace Transformers 构
 
 ```bash
 # 启动 docker container
-docker run --runtime=nvidia -it --rm --shm-size="10g" --cap-add=SYS_ADMIN -v $PWD:/openrlhf nvcr.io/nvidia/pytorch:24.07-py3 bash
+docker run --runtime=nvidia -it --rm --shm-size="10g" --cap-add=SYS_ADMIN -v $PWD:/openrlhf nvcr.io/nvidia/pytorch:25.02-py3 bash
 sudo pip uninstall xgboost transformer_engine flash_attn pynvml -y
 
 # pip install
 pip install openrlhf
 
-# 如果你需要使用 vLLM 加速 (安装 vLLM 0.8.5.post1)
+# 如果你需要使用 vLLM 加速 (安装 vLLM 0.10.0)
 pip install openrlhf[vllm]
 # 最新的 vLLM 也是支持的
 pip install openrlhf[vllm_latest]
@@ -116,7 +119,7 @@ pip install -e .
 ```
 
 > [!NOTE]
->我们推荐使用 vLLM 0.8.5.post1 及以上版本。
+>我们推荐使用 vLLM 0.10.0 及以上版本。
 >我们也提供了 [Dockerfiles for vLLM](./dockerfile/) 和 [Nvidia-Docker 一键安装脚本](./examples/scripts/nvidia_docker_install.sh)。
 
 ### 准备数据集
@@ -153,16 +156,6 @@ dataset = [{"input_key": [
 tokenizer.apply_chat_template(dataset[0]["input_key"], tokenize=False)
 
 "<s>[INST] Hello, how are you? [/INST]I'm doing great. How can I help you today?</s> [INST] I'd like to show off how chat templating works! [/INST]"
-```
-
-如何指定训练和测试数据分区 ?
-
-你可以使用 `data_type@data_dir` 的方式指定, 比如下面的数据集可以设置为 `--dataset json@./data`
-
-```
-data
-├── test.jsonl
-└── train.jsonl
 ```
 
 如何指定测试数据集 ?
@@ -329,7 +322,7 @@ ray job submit --address="http://127.0.0.1:8265" \
 > [!NOTE]
 > OpenRLHF 中的 RLOO 和 REINFORCE++-baseline 是基于 REINFORCE++ 的修改版本：
 > - REINFORCE++ 集成了 PPO 的关键优化技术（如优势归一化和 PPO-clip loss）到 REINFORCE，同时消除了对 Critic 网络的需求。
-> - REINFORCE++-baseline 使用`来自同一个 prompt 的多个样本的平均奖励`作为基线来重塑奖励（使用全局批次归一化 `/std`）。
+> - REINFORCE++-baseline 使用`来自同一个 prompt 的多个样本的平均奖励`作为基线来重塑奖励，因此在 RLVR 设置下，奖励函数对 0/1 或 -1/1 并不敏感，然后在 REINFORCE++ 中应用全局优势归一化。
 > - OpenRLHF 中的 RLOO 通过引入`per token 的 KL 奖励`并使用 `PPO-clip loss` 来修改原始版本。
 > - Dr. GRPO 移除了 GRPO 中的组归一化 `/std`。
 
@@ -384,38 +377,72 @@ ray job submit --address="http://127.0.0.1:8265" \
 
 OpenRLHF为异步RLHF和基于Agent的RLHF实现提供了全面的支持。要使用这些功能，只需在训练配置中包含`--async_train`和`--agent_func_path`参数即可。
 
+Agent API已经重新设计为使用基于类的方法，采用`AgentInstanceBase`和`AgentExecutorBase`类，以提供更好的模块化和可扩展性。
+
 ```python
 # agent_func.py
-step_idx = 0
-max_steps = 2
+import random
+from typing import Any, Dict
 
-async def step(state, action, label, **kwargs) -> Tuple[float, Dict[str, Any], bool]:
-    global step_idx, max_steps
-    # 验证后结束
-    if step_idx >= max_steps:
-        done = True
-        # 使用torch.rand生成随机奖励
-        reward = torch.rand(1)
-        next_state = state + action + " The answer is correct. <|endoftext|>"
-    else:
-        done = False
-        reward = torch.tensor(0)
-        # 更新状态
-        next_state = state + action + " The answer is not correct, please try again: "
-    step_idx += 1
+import torch
+from openrlhf.utils.agent import AgentExecutorBase, AgentInstanceBase
 
-    return {
-        "rewards": reward,  # 用于优势计算的奖励
-        "scores": reward,  # 用于动态过滤的分数（0-1奖励）
-        "next_state": next_state,  # 下一步vLLM的更新状态
-        "done": done,  # 表示回合是否完成的布尔值
-        "sampling_params": kwargs.get("sampling_params", None),  # 下一步vLLM采样的参数
-        "extra_logs": {"dummy_scores": reward},  # 额外的日志信息
-    }
+
+# A simple n-step random environment
+class AgentInstance(AgentInstanceBase):
+    async def __init__(self, *args, **kwargs):
+        self.step_idx = 0
+        self.max_steps = random.randint(1, 3)  # 1-3 steps
+
+    async def reset(self, states: dict, **kwargs):
+        return {"observation": states["observation"]}  # Return original text observation
+
+    async def step(self, states: dict, **kwargs) -> Dict[str, Any]:
+        print(f"step_idx: {self.step_idx}, max_steps: {self.max_steps}")
+
+        observation_text = states["observation_text"]
+        action_text = states["action_text"]
+        label = states["label"]
+
+        # Check if episode is done
+        done = self.step_idx >= self.max_steps
+        reward = torch.randint(0, 2, (1,)).float() if done else torch.tensor(0)
+
+        # Generate environment feedback based on whether episode is done
+        environment_feedback = (
+            "\n\nHuman: [CORRECT]\n</s>"
+            if done
+            else "\n\nHuman: [INCORRECT]\nPlease analyze the issues and try again.\n</s>\n\nAssistant: "
+        )
+
+        self.step_idx += 1
+
+        return {
+            "rewards": reward,  # Rewards for advantage calculation
+            "scores": reward,  # Scores for dynamic filtering (0-1 reward)
+            "environment_feedback": environment_feedback,  # Environment feedback text
+            "done": done,  # Boolean indicating if the episode is complete
+            "sampling_params": states.get("sampling_params", None),  # Parameters for vLLM sampling in next step
+            "extra_logs": {"dummy_scores": reward},  # Additional logging information
+        }
+
+
+class AgentExecutor(AgentExecutorBase):
+    def __init__(self, max_steps, max_length, llm_engine, hf_tokenizer, result_queue):
+        super().__init__(AgentInstance, max_steps, max_length, llm_engine, hf_tokenizer, result_queue)
+
+    async def execute(self, prompt, label, sampling_params):
+        # You could override the execute function of AgentExecutorBase to add custom agent running logic
+        return await super().execute(prompt, label, sampling_params)
 ```
 
 您还可以通过设置`export OPENRLHF_ASYNC_NUM_TASKS=128`来配置每个vLLM引擎的最大并发代理数。
 此外，您可以通过在环境中设置`export OPENRLHF_ASYNC_QUEUE_SIZE=1`（此参数控制缓冲区最多可以存储多少批数据）来控制离策略采样的程度。
+
+> [!NOTE]
+> 通过重写 `AgentExecutorBase` 的 `execute` 函数，您可以实现完全自定义的代理运行过程。该设计遵循 **token-in-token-out 原则**，确保采样和训练样本之间的一致性，避免文本级处理可能出现的潜在不匹配问题。
+
+
 
 > [!NOTE] 
 > OpenRLHF的Agent RLHF也支持混合引擎训练。要启用此功能，请移除`--async_train`标志并启用`--colocate_all_models`。
@@ -435,31 +462,18 @@ python -m openrlhf.cli.lora_combiner \
     --bf16
 ```
 
-## 性能
-
-我们通过启用 Adam offload、奖励模型（RM）和参考模型（Ref）offload 等技术，最大限度地优化了 DSChat 的性能，以增加推理阶段的微批次大小并避免内存不足问题。我们甚至修复了 DSChat 中的一些错误，为 LLaMA2 启用了 Hybrid Engine（HE）。使用优化后的 DSChat 和 OpenRLHF 训练 1024 个提示的 1 个 PPO epoch 所需的平均时间（秒）：
-
-| **大小** | **NVIDIA A800-80GB GPUs** | **优化后的 DSChat (带 Hybrid Engine)** | **OpenRLHF** | **加速比** |
-| :---: | :---: | :---: | :---: | :---: |
-| 7B | 16 | 855.09 | 471.11 | 1.82x |
-| 13B | 32 | 1528.93 | 608.93 | 2.5x |
-| 34B | 32 | 3634.98 | 1526.4 | 2.4x |
-| 70B | 32 | 10407.0 | 4488.53 | 2.3x |
-
-> [!NOTE]
-> 这些数据已经过时，请参考性能调优部分进行重新测试。
-
 ### 性能调优指南
 
 为了获得最佳性能，我们建议按 `vLLM:Actor:Critic = 1:1:1` 的比例分配节点。
 
 - 例如，对于 70B 模型和 48 个 A100 GPU，建议将 16 个 A100 GPU 分配给 vLLM 引擎，16 个 GPU 分配给 Actor 模型，剩余的 16 个 GPU 分配给 Critic 模型。
 - 当 RL 算法收敛性满足要求时请启用异步训练 `--async_train`。
-- 当有足够的 GPU 内存时，使用 hybrid engine `--colocate_all_models` 和 `--vllm_enable_sleep` 以及 `--deepspeed_enable_sleep`，而不是分布式 RLHF。
+- 当有足够的 GPU 内存时，使用 Hybrid engine `--colocate_all_models` 和 `--vllm_enable_sleep` 以及 `--deepspeed_enable_sleep`，而不是分布式 RLHF。
 - 启用 `--colocate_critic_reward`、`--colocate_actor_ref` 选项来合并节点。
 - 应该尽可能增加 `rollout_micro_batch_size`（并最小化 vLLM 引擎的 TP 大小）。在训练阶段，较大的 `--micro_train_batch_size` 更好，并启用 `--packing_samples`。
 - 当有足够的 GPU 内存时，请禁用 `--adam_offload` 并启用 `--overlap_comm`。同时启用 `--deepcompile` 来加速训练。
 - 对于 vLLM，请使用 `--vllm_sync_backend nccl`
+- 启动 ``--use_dynamic_batch`` 以加速 deepspeed 训练和前向过程.
 - 当 `n_samples_per_prompts` > 1 时，在 vLLM 生成中启用 [enable_prefix_caching](https://docs.vllm.ai/en/stable/automatic_prefix_caching/apc.html)。
 - 对于大型基础模型，如果发生 OOM，不要使用任何 `--colocate_xxxx` 选项。
 
@@ -531,12 +545,22 @@ python -m openrlhf.cli.lora_combiner \
 (2024/7) 我们的 GitHub 组织从 OpenLLMAI 迁移到了 OpenRLHF.
 
 ## 引用
+OpenRLHF
 ```
 @article{hu2024openrlhf,
   title={OpenRLHF: An Easy-to-use, Scalable and High-performance RLHF Framework},
   author={Jian Hu and Xibin Wu and Zilin Zhu and Xianyu and Weixun Wang and Dehao Zhang and Yu Cao},
   journal={arXiv preprint arXiv:2405.11143},
   year={2024}
+}
+```
+REINFORCE++-baseline
+```
+@article{hu2025reinforce++,
+  title={Reinforce++: A simple and efficient approach for aligning large language models},
+  author={Hu, Jian},
+  journal={arXiv preprint arXiv:2501.03262},
+  year={2025}
 }
 ```
 
