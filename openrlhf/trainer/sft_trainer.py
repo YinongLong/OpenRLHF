@@ -149,7 +149,7 @@ class SFTTrainer(ABC):
                     aux_loss = output.aux_loss
                 else:
                     aux_loss = 0
-                gpt_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1])
+                gpt_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], args.dynamic_weighting)
                 loss = gpt_loss + aux_loss * self.args.aux_loss_coef
                 self.strategy.backward(loss, self.model, self.optimizer)
                 self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler)
