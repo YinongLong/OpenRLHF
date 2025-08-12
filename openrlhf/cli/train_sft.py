@@ -139,6 +139,7 @@ def train(args):
         tokenizer=tokenizer,
         save_hf_ckpt=args.save_hf_ckpt,
         disable_ds_ckpt=args.disable_ds_ckpt,
+        token_level_loss=not args.seq_level_loss
     )
 
     trainer.fit(args, consumed_samples, num_update_steps_per_epoch)
@@ -189,6 +190,7 @@ if __name__ == "__main__":
     parser.add_argument("--ds_tensor_parallel_size", type=int, default=1, help="DeepSpeed Tensor parallel size")
 
     # SFT
+    parser.add_argument("--seq_level_loss", action="store_true", default=False)
     parser.add_argument("--dynamic_weighting", action="store_true", default=False)
     parser.add_argument("--max_epochs", type=int, default=2)
     parser.add_argument("--aux_loss_coef", type=float, default=0, help="MoE balancing loss")

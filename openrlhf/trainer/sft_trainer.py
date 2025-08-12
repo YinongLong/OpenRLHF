@@ -44,6 +44,7 @@ class SFTTrainer(ABC):
         tokenizer=None,
         save_hf_ckpt: bool = False,
         disable_ds_ckpt: bool = False,
+        token_level_loss: bool = True
     ) -> None:
         super().__init__()
         self.strategy = strategy
@@ -61,7 +62,7 @@ class SFTTrainer(ABC):
         self.save_hf_ckpt = save_hf_ckpt
         self.disable_ds_ckpt = disable_ds_ckpt
 
-        self.loss_fn = SFTLoss()
+        self.loss_fn = SFTLoss(token_level_loss)
 
         # Mixtral 8*7b
         self.aux_loss = self.args.aux_loss_coef > 1e-8
