@@ -62,11 +62,7 @@ class SFTLoss(nn.Module):
         super().__init__()
         self.token_level_loss = token_level_loss
 
-    def forward(self, per_token_logps: torch.Tensor, loss_mask: torch.Tensor, dynamic_weighting: bool = False) -> torch.Tensor:
-        if dynamic_weighting:
-            dynamic_weight = torch.exp(per_token_logps.detach())
-            per_token_logps = dynamic_weight * per_token_logps
-
+    def forward(self, per_token_logps: torch.Tensor, loss_mask: torch.Tensor) -> torch.Tensor:
         loss = (
             masked_mean(-per_token_logps, loss_mask, dim=None)
             if self.token_level_loss
