@@ -38,20 +38,23 @@ class ChannelTagMapping:
     """
 
     def __init__(self):
-        self.tag2id = {}
-        self.id2tag = {}
+        self.tag2id = {'[UNK]': 0}
+        self.id2tag = {0: '[UNK]'}
 
     def convert2id(self, tag):
-        assert tag in self.tag2id
+        if tag not in self.tag2id:
+            tag = '[UNK]'
         return self.tag2id[tag]
 
     def convert2tag(self, idx):
-        assert idx in self.id2tag
+        if idx not in self.id2tag:
+            idx = 0
         return self.id2tag[idx]
 
     def add_tag(self, tag):
         if tag in self.tag2id:
             return
+        self.id2tag[len(self.tag2id)] = tag
         self.tag2id[tag] = len(self.tag2id)
 
     def __len__(self):
@@ -121,9 +124,6 @@ class SFTDataset(Dataset):
             for c_tag in self.channel_tags:
                 self.channel_tag_mapping.add_tag(c_tag)
         self.channel_size = len(self.channel_tag_mapping)
-
-    def get_channel_tag_mapping(self):
-        return self.channel_tag_mapping
 
     def process_data(self, data):
         if self.multiturn and self.output_key:
