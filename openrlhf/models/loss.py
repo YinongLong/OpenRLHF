@@ -88,8 +88,9 @@ class SFTLossWithChannelMask(nn.Module):
             channel_masks = [torch.squeeze(c_mask, dim=1) for c_mask in channel_masks]
             logps_for_channel_loss = per_token_logps.detach()
             for i, c_mask in enumerate(channel_masks):
-                c_loss = masked_mean(-logps_for_channel_loss, c_mask, dim=None)
-                channel_loss[i] = c_loss
+                if c_mask.sum() > 0:
+                    c_loss = masked_mean(-logps_for_channel_loss, c_mask, dim=None)
+                    channel_loss[i] = c_loss
             loss = masked_mean(-per_token_logps, loss_mask, dim=None)
         else:
             loss = masked_mean(-per_token_logps, loss_mask, dim=-1).mean()
