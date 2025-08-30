@@ -5,7 +5,7 @@ import torch
 from torch.optim import Optimizer
 from tqdm import tqdm
 
-from openrlhf.models import SFTLoss
+from openrlhf.models import SFTLossWithChannelMask
 from openrlhf.utils.distributed_sampler import DistributedSampler
 
 
@@ -44,6 +44,7 @@ class SFTTrainer(ABC):
         tokenizer=None,
         save_hf_ckpt: bool = False,
         disable_ds_ckpt: bool = False,
+        channel_tag_mapping=None
     ) -> None:
         super().__init__()
         self.strategy = strategy
@@ -60,8 +61,9 @@ class SFTTrainer(ABC):
         self.args = strategy.args
         self.save_hf_ckpt = save_hf_ckpt
         self.disable_ds_ckpt = disable_ds_ckpt
+        self.channel_tag_mapping = channel_tag_mapping
 
-        self.loss_fn = SFTLoss()
+        self.loss_fn = SFTLossWithChannelMask()
 
         # Mixtral 8*7b
         self.aux_loss = self.args.aux_loss_coef > 1e-8
@@ -118,6 +120,8 @@ class SFTTrainer(ABC):
             disable=not self.strategy.is_rank_0(),
         )
         loss_sum = 0
+        channel_loss_sum = {}
+        channel_loss_cnt = {}
         for epoch in range(start_epoch, self.epochs):
             if isinstance(self.train_dataloader.sampler, DistributedSampler):
                 self.train_dataloader.sampler.set_epoch(
@@ -132,10 +136,11 @@ class SFTTrainer(ABC):
 
             # train
             self.model.train()
-            for inputs, attention_masks, loss_masks in self.train_dataloader:
+            for inputs, attention_masks, loss_masks, channel_masks in self.train_dataloader:
                 inputs = inputs.to(torch.cuda.current_device()).squeeze(1)
                 attention_mask = attention_masks.to(torch.cuda.current_device()).squeeze(1)
                 loss_mask = loss_masks.to(torch.cuda.current_device()).squeeze(1)
+                channel_masks = channel_masks.to(torch.cuda.current_device())
                 per_token_log_probs, output = self.model(
                     inputs,
                     attention_mask=attention_mask,
@@ -149,7 +154,7 @@ class SFTTrainer(ABC):
                     aux_loss = output.aux_loss
                 else:
                     aux_loss = 0
-                gpt_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1])
+                gpt_loss, channel_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], channel_masks[:, :, :-1])
                 loss = gpt_loss + aux_loss * self.args.aux_loss_coef
                 self.strategy.backward(loss, self.model, self.optimizer)
                 self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler)
@@ -161,6 +166,16 @@ class SFTTrainer(ABC):
                 }
                 if self.aux_loss:
                     logs_dict["aux_loss"] = aux_loss.item()
+
+                if channel_loss:
+                    for channel_idx, c_loss in channel_loss.items():
+                        channel_tag = self.channel_tag_mapping[channel_idx]
+                        if channel_tag not in channel_loss_sum:
+                            channel_loss_sum[channel_tag] = 0
+                            channel_loss_cnt[channel_tag] = 0
+                        channel_loss_sum[channel_tag] += c_loss.item()
+                        channel_loss_cnt[channel_tag] += 1
+
                 # step bar
                 logs_dict = self.strategy.all_reduce(logs_dict)
                 step_bar.set_postfix(logs_dict)
@@ -169,6 +184,12 @@ class SFTTrainer(ABC):
                 # logs/checkpoints/evaluation
                 if step % self.strategy.accumulated_gradient == 0:
                     logs_dict["loss_mean"] = loss_sum / self.strategy.accumulated_gradient
+                    if channel_loss_sum:
+                        for channel_tag, c_loss_sum in channel_loss_sum.items():
+                            c_cnt = channel_loss_cnt[channel_tag]
+                            logs_dict[f"channel-{channel_tag}"] = c_loss_sum / c_cnt
+                        channel_loss_sum = {}
+                        channel_loss_cnt = {}
                     loss_sum = 0
                     global_step = step // self.strategy.accumulated_gradient
                     client_states = {"consumed_samples": global_step * args.train_batch_size}
@@ -223,11 +244,14 @@ class SFTTrainer(ABC):
                 desc="Eval stage of steps %d" % steps,
                 disable=not self.strategy.is_rank_0(),
             )
+            channel_loss_sum = {}
+            channel_loss_cnt = {}
 
-            for inputs, attention_masks, loss_masks in eval_dataloader:
+            for inputs, attention_masks, loss_masks, channel_masks in eval_dataloader:
                 inputs = inputs.to(torch.cuda.current_device()).squeeze(1)
                 attention_mask = attention_masks.to(torch.cuda.current_device()).squeeze(1)
                 loss_mask = loss_masks.to(torch.cuda.current_device()).squeeze(1)
+                channel_masks = channel_masks.to(torch.cuda.current_device())
                 per_token_log_probs = self.model(
                     inputs,
                     attention_mask=attention_mask,
@@ -235,11 +259,25 @@ class SFTTrainer(ABC):
                     ring_attn_group=self.strategy.ring_attn_group,
                 )
 
-                loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1])
+                loss, channel_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], channel_masks[:, :, :-1])
+                if channel_loss:
+                    for channel_idx, c_loss in channel_loss.items():
+                        channel_tag = self.channel_tag_mapping[channel_idx]
+                        if channel_tag not in channel_loss_sum:
+                            channel_loss_sum[channel_tag] = 0
+                            channel_loss_cnt[channel_tag] = 0
+                        channel_loss_sum[channel_tag] += c_loss.item()
+                        channel_loss_cnt[channel_tag] += 1
 
                 times += 1
                 loss_sum += loss.item()
                 bar_dict = {"eval gpt_loss": loss_sum / times}
+
+                if channel_loss_sum:
+                    for channel_tag, c_loss_sum in channel_loss_sum.items():
+                        c_cnt = channel_loss_cnt[channel_tag]
+                        bar_dict[f"channel-{channel_tag}"] = c_loss_sum / c_cnt
+
                 step_bar.update()
                 logs = self.strategy.all_reduce(bar_dict)
                 step_bar.set_postfix(logs)

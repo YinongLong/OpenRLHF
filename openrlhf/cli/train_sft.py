@@ -45,6 +45,8 @@ def train(args):
     # configure optimizer
     optim = strategy.create_optimizer(model, lr=args.learning_rate, betas=args.adam_betas, weight_decay=args.l2)
 
+    channel_tag_mapping = None
+
     # prepare for data and dataset
     train_data = blending_datasets(
         args.dataset,
@@ -63,8 +65,12 @@ def train(args):
         pretrain_mode=args.pretrain_mode,
         input_template=args.input_template,
         multiturn=args.multiturn,
-        num_processors=args.num_processors
+        num_processors=args.num_processors,
+        channel_tag_mapping=channel_tag_mapping
     )
+
+    channel_tag_mapping = train_dataset.channel_tag_mapping
+
     # prepare dataloader
     train_dataloader = strategy.setup_dataloader(
         train_dataset,
@@ -82,6 +88,7 @@ def train(args):
             strategy,
             dataset_split=args.eval_split,
         )
+
         eval_dataset = SFTDataset(
             eval_data,
             tokenizer,
@@ -90,7 +97,8 @@ def train(args):
             pretrain_mode=args.pretrain_mode,
             input_template=args.input_template,
             multiturn=args.multiturn,
-            num_processors=args.num_processors
+            num_processors=args.num_processors,
+            channel_tag_mapping=channel_tag_mapping
         )
         eval_dataloader = strategy.setup_dataloader(
             eval_dataset,
@@ -139,6 +147,7 @@ def train(args):
         tokenizer=tokenizer,
         save_hf_ckpt=args.save_hf_ckpt,
         disable_ds_ckpt=args.disable_ds_ckpt,
+        channel_tag_mapping=channel_tag_mapping
     )
 
     trainer.fit(args, consumed_samples, num_update_steps_per_epoch)
@@ -232,6 +241,7 @@ if __name__ == "__main__":
     parser.add_argument("--train_split", type=str, default="train", help="train split of the HF dataset")
     parser.add_argument("--multiturn", action="store_true", default=False, help="Use compacted multiturn dataset")
 
+    parser.add_argument("--channel_key", type=str, default="channel_tag", help="sample source key")
     parser.add_argument("--input_key", type=str, default="input", help="JSON dataset key")
     parser.add_argument("--output_key", type=str, default=None, help="JSON dataset key")
     parser.add_argument("--input_template", type=str, default="User: {}\nAssistant: ")

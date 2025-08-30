@@ -10,6 +10,7 @@ from .loss import (
     PolicyLoss,
     PRMLoss,
     SFTLoss,
+    SFTLossWithChannelMask,
     ValueLoss,
     VanillaKTOLoss,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "Actor",
     "RMActor",
     "SFTLoss",
+    "SFTLossWithChannelMask",
     "DPOLoss",
     "GPTLMLoss",
     "KDLoss",
