@@ -122,6 +122,9 @@ class SFTDataset(Dataset):
                 self.channel_tag_mapping.add_tag(c_tag)
         self.channel_size = len(self.channel_tag_mapping)
 
+    def get_channel_tag_mapping(self):
+        return self.channel_tag_mapping
+
     def process_data(self, data):
         if self.multiturn and self.output_key:
             data[self.input_key].append(data[self.output_key])

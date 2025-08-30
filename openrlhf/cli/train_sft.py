@@ -45,8 +45,6 @@ def train(args):
     # configure optimizer
     optim = strategy.create_optimizer(model, lr=args.learning_rate, betas=args.adam_betas, weight_decay=args.l2)
 
-    channel_tag_mapping = None
-
     # prepare for data and dataset
     train_data = blending_datasets(
         args.dataset,
@@ -65,11 +63,10 @@ def train(args):
         pretrain_mode=args.pretrain_mode,
         input_template=args.input_template,
         multiturn=args.multiturn,
-        num_processors=args.num_processors,
-        channel_tag_mapping=channel_tag_mapping
+        num_processors=args.num_processors
     )
 
-    channel_tag_mapping = train_dataset.channel_tag_mapping
+    channel_tag_mapping = train_dataset.get_channel_tag_mapping()
 
     # prepare dataloader
     train_dataloader = strategy.setup_dataloader(
