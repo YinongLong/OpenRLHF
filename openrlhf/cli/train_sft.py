@@ -65,6 +65,7 @@ def train(args):
         multiturn=args.multiturn,
         num_processors=args.num_processors
     )
+    channel_tag_mapping=train_dataset.channel_tag_mapping
 
     # prepare dataloader
     train_dataloader = strategy.setup_dataloader(
@@ -93,7 +94,7 @@ def train(args):
             input_template=args.input_template,
             multiturn=args.multiturn,
             num_processors=args.num_processors,
-            channel_tag_mapping=train_dataset.channel_tag_mapping
+            channel_tag_mapping=channel_tag_mapping
         )
         eval_dataloader = strategy.setup_dataloader(
             eval_dataset,
