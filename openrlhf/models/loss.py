@@ -91,6 +91,8 @@ class SFTLossWithChannelMask(nn.Module):
                 if c_mask.sum() > 0:
                     c_loss = masked_mean(-logps_for_channel_loss, c_mask, dim=None)
                     channel_loss[i] = c_loss
+                else:
+                    channel_loss[i] = torch.tensor(0.0)
             loss = masked_mean(-per_token_logps, loss_mask, dim=None)
         else:
             loss = masked_mean(-per_token_logps, loss_mask, dim=-1).mean()

@@ -173,8 +173,9 @@ class SFTTrainer(ABC):
                         if channel_tag not in channel_loss_sum:
                             channel_loss_sum[channel_tag] = 0
                             channel_loss_cnt[channel_tag] = 0
-                        channel_loss_sum[channel_tag] += c_loss.item()
-                        channel_loss_cnt[channel_tag] += 1
+                        if c_loss.item() > 0:
+                            channel_loss_sum[channel_tag] += c_loss.item()
+                            channel_loss_cnt[channel_tag] += 1
 
                 # step bar
                 logs_dict = self.strategy.all_reduce(logs_dict)
@@ -187,7 +188,7 @@ class SFTTrainer(ABC):
                     if channel_loss_sum:
                         for channel_tag, c_loss_sum in channel_loss_sum.items():
                             c_cnt = channel_loss_cnt[channel_tag]
-                            logs_dict[f"channel-{channel_tag}"] = c_loss_sum / c_cnt
+                            logs_dict[f"channel-{channel_tag}"] = c_loss_sum / (c_cnt + 1e-6)
                         channel_loss_sum = {}
                         channel_loss_cnt = {}
                     loss_sum = 0
@@ -266,8 +267,9 @@ class SFTTrainer(ABC):
                         if channel_tag not in channel_loss_sum:
                             channel_loss_sum[channel_tag] = 0
                             channel_loss_cnt[channel_tag] = 0
-                        channel_loss_sum[channel_tag] += c_loss.item()
-                        channel_loss_cnt[channel_tag] += 1
+                        if c_loss.item() > 0:
+                            channel_loss_sum[channel_tag] += c_loss.item()
+                            channel_loss_cnt[channel_tag] += 1
 
                 times += 1
                 loss_sum += loss.item()
@@ -276,7 +278,7 @@ class SFTTrainer(ABC):
                 if channel_loss_sum:
                     for channel_tag, c_loss_sum in channel_loss_sum.items():
                         c_cnt = channel_loss_cnt[channel_tag]
-                        bar_dict[f"channel-{channel_tag}"] = c_loss_sum / c_cnt
+                        bar_dict[f"channel-{channel_tag}"] = c_loss_sum / (c_cnt + 1e-6)
 
                 step_bar.update()
                 logs = self.strategy.all_reduce(bar_dict)
