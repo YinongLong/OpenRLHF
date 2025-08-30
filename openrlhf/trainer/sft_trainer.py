@@ -5,7 +5,7 @@ import torch
 from torch.optim import Optimizer
 from tqdm import tqdm
 
-from openrlhf.models import SFTLossWithChannelMask
+from openrlhf.models import SFTLoss, SFTLossWithChannelMask
 from openrlhf.utils.distributed_sampler import DistributedSampler
 
 
@@ -63,7 +63,10 @@ class SFTTrainer(ABC):
         self.disable_ds_ckpt = disable_ds_ckpt
         self.channel_tag_mapping = channel_tag_mapping
 
-        self.loss_fn = SFTLossWithChannelMask()
+        if channel_tag_mapping is None:
+            self.loss_fn = SFTLoss()
+        else:
+            self.loss_fn = SFTLossWithChannelMask()
 
         # Mixtral 8*7b
         self.aux_loss = self.args.aux_loss_coef > 1e-8
@@ -140,7 +143,9 @@ class SFTTrainer(ABC):
                 inputs = inputs.to(torch.cuda.current_device()).squeeze(1)
                 attention_mask = attention_masks.to(torch.cuda.current_device()).squeeze(1)
                 loss_mask = loss_masks.to(torch.cuda.current_device()).squeeze(1)
-                channel_masks = channel_masks.to(torch.cuda.current_device())
+                if self.channel_tag_mapping is not None:
+                    channel_masks = channel_masks.to(torch.cuda.current_device())
+
                 per_token_log_probs, output = self.model(
                     inputs,
                     attention_mask=attention_mask,
@@ -154,7 +159,13 @@ class SFTTrainer(ABC):
                     aux_loss = output.aux_loss
                 else:
                     aux_loss = 0
-                gpt_loss, channel_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], channel_masks[:, :, :-1])
+
+                if self.channel_tag_mapping is None:
+                    gpt_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1])
+                    channel_loss = {}
+                else:
+                    gpt_loss, channel_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], channel_masks[:, :, :-1])
+
                 loss = gpt_loss + aux_loss * self.args.aux_loss_coef
                 self.strategy.backward(loss, self.model, self.optimizer)
                 self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler)
@@ -252,7 +263,10 @@ class SFTTrainer(ABC):
                 inputs = inputs.to(torch.cuda.current_device()).squeeze(1)
                 attention_mask = attention_masks.to(torch.cuda.current_device()).squeeze(1)
                 loss_mask = loss_masks.to(torch.cuda.current_device()).squeeze(1)
-                channel_masks = channel_masks.to(torch.cuda.current_device())
+
+                if self.channel_tag_mapping is not None:
+                    channel_masks = channel_masks.to(torch.cuda.current_device())
+
                 per_token_log_probs = self.model(
                     inputs,
                     attention_mask=attention_mask,
@@ -260,7 +274,12 @@ class SFTTrainer(ABC):
                     ring_attn_group=self.strategy.ring_attn_group,
                 )
 
-                loss, channel_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], channel_masks[:, :, :-1])
+                if self.channel_tag_mapping is None:
+                    loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1])
+                    channel_loss = {}
+                else:
+                    loss, channel_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], channel_masks[:, :, :-1])
+
                 if channel_loss:
                     for channel_idx, c_loss in channel_loss.items():
                         channel_tag = self.channel_tag_mapping.convert2tag(channel_idx)

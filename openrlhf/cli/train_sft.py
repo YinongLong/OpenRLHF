@@ -237,7 +237,7 @@ if __name__ == "__main__":
     parser.add_argument("--train_split", type=str, default="train", help="train split of the HF dataset")
     parser.add_argument("--multiturn", action="store_true", default=False, help="Use compacted multiturn dataset")
 
-    parser.add_argument("--channel_key", type=str, default="channel_tag", help="sample source key")
+    parser.add_argument("--channel_key", type=str, default=None, help="sample source key")
     parser.add_argument("--input_key", type=str, default="input", help="JSON dataset key")
     parser.add_argument("--output_key", type=str, default=None, help="JSON dataset key")
     parser.add_argument("--input_template", type=str, default="User: {}\nAssistant: ")
