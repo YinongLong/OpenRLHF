@@ -169,7 +169,7 @@ class SFTTrainer(ABC):
 
                 if channel_loss:
                     for channel_idx, c_loss in channel_loss.items():
-                        channel_tag = self.channel_tag_mapping[channel_idx]
+                        channel_tag = self.channel_tag_mapping.convert2tag(channel_idx)
                         if channel_tag not in channel_loss_sum:
                             channel_loss_sum[channel_tag] = 0
                             channel_loss_cnt[channel_tag] = 0
@@ -262,7 +262,7 @@ class SFTTrainer(ABC):
                 loss, channel_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], channel_masks[:, :, :-1])
                 if channel_loss:
                     for channel_idx, c_loss in channel_loss.items():
-                        channel_tag = self.channel_tag_mapping[channel_idx]
+                        channel_tag = self.channel_tag_mapping.convert2tag(channel_idx)
                         if channel_tag not in channel_loss_sum:
                             channel_loss_sum[channel_tag] = 0
                             channel_loss_cnt[channel_tag] = 0
