@@ -32,31 +32,6 @@ def preprocess_data(
     return prompt, response
 
 
-class ChannelTagMapping:
-    """
-    manage channel tags
-    """
-
-    def __init__(self):
-        self.tag2id = {}
-        self.id2tag = {}
-
-    def convert2id(self, tag):
-        return self.tag2id[tag]
-
-    def convert2tag(self, idx):
-        return self.id2tag[idx]
-
-    def add_tag(self, tag):
-        if tag in self.tag2id:
-            return
-        self.id2tag[len(self.tag2id)] = tag
-        self.tag2id[tag] = len(self.tag2id)
-
-    def __len__(self):
-        return len(self.tag2id)
-
-
 class SFTDataset(Dataset):
     """
     Dataset for SFT model
@@ -76,8 +51,7 @@ class SFTDataset(Dataset):
         input_template=None,
         pretrain_mode=False,
         num_processors=8,  # Specify the number of processors you want to use
-        multiturn=False,
-        channel_tag_mapping=None
+        multiturn=False
     ) -> None:
         super().__init__()
         self.tokenizer = tokenizer
@@ -85,13 +59,11 @@ class SFTDataset(Dataset):
         self.pretrain_mode = pretrain_mode
         self.max_length = max_length
         self.multiturn = multiturn
-        self.channel_tag_mapping = channel_tag_mapping
 
         # chat template
         self.input_template = input_template
         self.input_key = getattr(self.strategy.args, "input_key", None)
         self.output_key = getattr(self.strategy.args, "output_key", None)
-        self.channel_key = getattr(self.strategy.args, "channel_key", None)
         self.apply_chat_template = getattr(self.strategy.args, "apply_chat_template", False)
 
         if self.apply_chat_template:
@@ -113,16 +85,6 @@ class SFTDataset(Dataset):
         self.responses = processed_dataset["response"]
         self.prompt_ids_lens = processed_dataset["prompt_ids_len"]
         self.response_ranges = processed_dataset["response_ranges"] if self.multiturn else None
-
-        self.channel_tags = None
-        if self.channel_key is not None:
-            self.channel_tags = processed_dataset["channel_tag"]
-            if self.channel_tag_mapping is None:
-                self.channel_tag_mapping = ChannelTagMapping()
-            assert isinstance(self.channel_tag_mapping, ChannelTagMapping)
-            for c_tag in self.channel_tags:
-                self.channel_tag_mapping.add_tag(c_tag)
-            self.channel_size = len(self.channel_tag_mapping)
 
     def process_data(self, data):
         if self.multiturn and self.output_key:
@@ -204,10 +166,6 @@ class SFTDataset(Dataset):
             "response_ranges": response_ranges if self.multiturn else None,
         }
 
-        if self.channel_key is not None:
-            channel_tag = data[self.channel_key]
-            data_dict['channel_tag'] = channel_tag
-
         return data_dict
 
     def __len__(self):
@@ -217,11 +175,6 @@ class SFTDataset(Dataset):
     def __getitem__(self, idx):
         prompt = self.prompts[idx]
         response = self.responses[idx]
-
-        channel_idx = -1
-        if self.channel_tags is not None:
-            channel_tag = self.channel_tags[idx]
-            channel_idx = self.channel_tag_mapping.convert2id(channel_tag)
 
         if not self.pretrain_mode:
             text = (prompt + response).rstrip("\n")
@@ -246,7 +199,7 @@ class SFTDataset(Dataset):
             # to avoid EOS_token truncation
             input_ids[0][-1] = self.tokenizer.eos_token_id
             attention_mask[0][-1] = True
-        return input_ids, attention_mask, loss_mask, channel_idx
+        return input_ids, attention_mask, loss_mask
 
     def get_loss_mask(self, input_ids, idx):
         if self.pretrain_mode:
@@ -266,25 +219,14 @@ class SFTDataset(Dataset):
         input_ids = []
         attention_masks = []
         loss_masks = []
-        channel_masks = []
 
         for input_id, attention_mask, loss_mask, channel_idx in item_list:
             input_ids.append(input_id)
             attention_masks.append(attention_mask)
             loss_masks.append(loss_mask)
 
-            if channel_idx < 0:
-                continue
-            channel_mask = torch.zeros(self.channel_size, loss_mask.shape[-1], dtype=torch.float32)
-            channel_mask[channel_idx, :] = loss_mask
-            channel_masks.append(channel_mask)
-
         input_ids = zero_pad_sequences(input_ids, "right", self.tokenizer.pad_token_id)
         attention_masks = zero_pad_sequences(attention_masks, "right")
         loss_masks = zero_pad_sequences(loss_masks, "right")
 
-        if channel_masks:
-            channel_masks = zero_pad_sequences(channel_masks, "right", stack=True)
-        else:
-            channel_masks = torch.zeros_like(loss_masks)
-        return input_ids, attention_masks, loss_masks, channel_masks
+        return input_ids, attention_masks, loss_masks
