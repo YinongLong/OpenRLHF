@@ -220,7 +220,7 @@ class SFTDataset(Dataset):
         attention_masks = []
         loss_masks = []
 
-        for input_id, attention_mask, loss_mask, channel_idx in item_list:
+        for input_id, attention_mask, loss_mask in item_list:
             input_ids.append(input_id)
             attention_masks.append(attention_mask)
             loss_masks.append(loss_mask)
