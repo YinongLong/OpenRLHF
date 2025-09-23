@@ -5,7 +5,7 @@ import torch
 from torch.optim import Optimizer
 from tqdm import tqdm
 
-from openrlhf.models import SFTLoss
+from openrlhf.models import SFTLoss, MedusaLoss
 from openrlhf.utils.distributed_sampler import DistributedSampler
 
 
@@ -61,7 +61,15 @@ class SFTTrainer(ABC):
         self.save_hf_ckpt = save_hf_ckpt
         self.disable_ds_ckpt = disable_ds_ckpt
 
-        self.loss_fn = SFTLoss()
+        if self.args.use_medusa:
+            self.loss_fn = MedusaLoss(
+                medusa_heads_coefficient=self.args.medusa_heads_coefficient,
+                medusa_decay_coefficient=self.args.medusa_decay_coefficient,
+                medusa_scheduler=self.args.medusa_scheduler,
+                medusa_only_heads=self.args.medusa_only_heads
+            )
+        else:
+            self.loss_fn = SFTLoss()
 
         # Mixtral 8*7b
         self.aux_loss = self.args.aux_loss_coef > 1e-8
@@ -112,6 +120,8 @@ class SFTTrainer(ABC):
         start_epoch = consumed_samples // args.train_batch_size // num_update_steps_per_epoch
         consumed_samples = consumed_samples % (num_update_steps_per_epoch * args.train_batch_size)
 
+        max_steps = self.epochs * len(self.train_dataloader) // self.strategy.accumulated_gradient
+
         epoch_bar = tqdm(
             range(start_epoch, self.epochs),
             desc="Train epoch",
@@ -137,13 +147,23 @@ class SFTTrainer(ABC):
                 attention_mask = attention_masks.to(torch.cuda.current_device()).squeeze(1)
                 loss_mask = loss_masks.to(torch.cuda.current_device()).squeeze(1)
 
-                per_token_log_probs, output = self.model(
-                    inputs,
-                    attention_mask=attention_mask,
-                    return_output=True,
-                    return_logprobs=True,
-                    ring_attn_group=self.strategy.ring_attn_group,
-                )
+                if self.args.use_medusa:
+                    per_token_log_probs, output = self.model(
+                        inputs,
+                        attention_mask=attention_mask,
+                        return_output=True,
+                        return_logprobs=True,
+                        medusa_only_heads=self.args.medusa_only_heads,
+                        ring_attn_group=self.strategy.ring_attn_group,
+                    )
+                else:
+                    per_token_log_probs, output = self.model(
+                        inputs,
+                        attention_mask=attention_mask,
+                        return_output=True,
+                        return_logprobs=True,
+                        ring_attn_group=self.strategy.ring_attn_group,
+                    )
 
                 # mixtral
                 if self.aux_loss:
@@ -151,7 +171,10 @@ class SFTTrainer(ABC):
                 else:
                     aux_loss = 0
 
-                gpt_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1])
+                if self.args.use_medusa:
+                    gpt_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], step // self.strategy.accumulated_gradient, max_steps)
+                else:
+                    gpt_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1])
 
                 loss = gpt_loss + aux_loss * self.args.aux_loss_coef
                 self.strategy.backward(loss, self.model, self.optimizer)
@@ -176,7 +199,7 @@ class SFTTrainer(ABC):
                     loss_sum = 0
                     global_step = step // self.strategy.accumulated_gradient
                     client_states = {"consumed_samples": global_step * args.train_batch_size}
-                    self.save_logs_and_checkpoints(args, global_step, step_bar, logs_dict, client_states)
+                    self.save_logs_and_checkpoints(args, global_step, max_steps, step_bar, logs_dict, client_states)
 
                 step += 1
 
@@ -188,7 +211,7 @@ class SFTTrainer(ABC):
             self._tensorboard.close()
 
     # logs/checkpoints/evaluation
-    def save_logs_and_checkpoints(self, args, global_step, step_bar, logs_dict={}, client_states={}):
+    def save_logs_and_checkpoints(self, args, global_step, max_steps, step_bar, logs_dict={}, client_states={}):
         if global_step % args.logging_steps == 0:
             # wandb
             if self._wandb is not None and self.strategy.is_rank_0():
@@ -203,7 +226,7 @@ class SFTTrainer(ABC):
         if global_step % args.eval_steps == 0:
             # do eval when eval_dataloader is not None and len(dataloader) > 0, avoid zero division in eval.
             if self.eval_dataloader is not None and len(self.eval_dataloader) > 0:
-                self.evaluate(self.eval_dataloader, global_step)
+                self.evaluate(self.eval_dataloader, max_steps, global_step)
 
         # save ckpt
         # TODO: save best model on dev, use loss/perplexity on whole dev dataset as metric
@@ -217,7 +240,7 @@ class SFTTrainer(ABC):
                 save_path = os.path.join(args.ckpt_path, f"{tag}_hf")
                 self.strategy.save_model(self.model, self.tokenizer, save_path)
 
-    def evaluate(self, eval_dataloader, steps=0):
+    def evaluate(self, eval_dataloader, max_steps, steps=0):
         times = 0
         self.model.eval()
         with torch.no_grad():
@@ -233,14 +256,26 @@ class SFTTrainer(ABC):
                 attention_mask = attention_masks.to(torch.cuda.current_device()).squeeze(1)
                 loss_mask = loss_masks.to(torch.cuda.current_device()).squeeze(1)
 
-                per_token_log_probs = self.model(
-                    inputs,
-                    attention_mask=attention_mask,
-                    return_logprobs=True,
-                    ring_attn_group=self.strategy.ring_attn_group,
-                )
+                if self.args.use_medusa:
+                    per_token_log_probs = self.model(
+                        inputs,
+                        attention_mask=attention_mask,
+                        return_logprobs=True,
+                        medusa_only_heads=self.args.medusa_only_heads,
+                        ring_attn_group=self.strategy.ring_attn_group,
+                    )
+                else:
+                    per_token_log_probs = self.model(
+                        inputs,
+                        attention_mask=attention_mask,
+                        return_logprobs=True,
+                        ring_attn_group=self.strategy.ring_attn_group,
+                    )
 
-                loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1])
+                if self.args.use_medusa:
+                    loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], steps, max_steps)
+                else:
+                    loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1])
 
                 times += 1
                 loss_sum += loss.item()

@@ -1,4 +1,4 @@
-from .actor import Actor
+from .actor import Actor, MedusaActor
 from .rm_actor import RMActor
 from .loss import (
     DPOLoss,
@@ -10,6 +10,7 @@ from .loss import (
     PolicyLoss,
     PRMLoss,
     SFTLoss,
+    MedusaLoss,
     SFTLossWithChannelMask,
     ValueLoss,
     VanillaKTOLoss,
@@ -18,8 +19,10 @@ from .model import get_llm_for_sequence_regression
 
 __all__ = [
     "Actor",
+    "MedusaActor",
     "RMActor",
     "SFTLoss",
+    "MedusaLoss",
     "SFTLossWithChannelMask",
     "DPOLoss",
     "GPTLMLoss",

@@ -7,7 +7,7 @@ from transformers.trainer import get_scheduler
 
 from openrlhf.datasets import SFTDataset
 from openrlhf.datasets.utils import blending_datasets
-from openrlhf.models import Actor
+from openrlhf.models import Actor, MedusaActor
 from openrlhf.trainer.sft_trainer import SFTTrainer
 from openrlhf.utils import get_strategy, get_tokenizer
 
@@ -19,19 +19,44 @@ def train(args):
 
     # configure model
     # load huggingface model
-    model = Actor(
-        args.pretrain,
-        use_flash_attention_2=args.flash_attn,
-        bf16=args.bf16,
-        load_in_4bit=args.load_in_4bit,
-        lora_rank=args.lora_rank,
-        lora_alpha=args.lora_alpha,
-        target_modules=args.target_modules,
-        lora_dropout=args.lora_dropout,
-        ds_config=strategy.get_ds_train_config(is_actor=True),
-        packing_samples=args.packing_samples,
-        use_liger_kernel=args.use_liger_kernel,
-    )
+    if args.use_medusa:
+        model = MedusaActor(
+            args.pretrain,
+            use_flash_attention_2=args.flash_attn,
+            bf16=args.bf16,
+            load_in_4bit=args.load_in_4bit,
+            lora_rank=args.lora_rank,
+            lora_alpha=args.lora_alpha,
+            target_modules=args.target_modules,
+            lora_dropout=args.lora_dropout,
+            ds_config=strategy.get_ds_train_config(is_actor=True),
+            packing_samples=args.packing_samples,
+            use_liger_kernel=args.use_liger_kernel,
+            medusa_num_heads=args.medusa_num_heads,
+            medusa_num_layers=args.medusa_num_layers,
+        )
+
+        if args.medusa_only_heads:
+            strategy.print("freeze layers!!!")
+            for param in model.model.parameters():
+                param.requires_grad = False
+            for param in model.model.medusa_head.parameters():
+                param.requires_grad = True
+
+    else:
+        model = Actor(
+            args.pretrain,
+            use_flash_attention_2=args.flash_attn,
+            bf16=args.bf16,
+            load_in_4bit=args.load_in_4bit,
+            lora_rank=args.lora_rank,
+            lora_alpha=args.lora_alpha,
+            target_modules=args.target_modules,
+            lora_dropout=args.lora_dropout,
+            ds_config=strategy.get_ds_train_config(is_actor=True),
+            packing_samples=args.packing_samples,
+            use_liger_kernel=args.use_liger_kernel,
+        )
     # configure tokenizer
     tokenizer = get_tokenizer(args.pretrain, model.model, "right", strategy, use_fast=not args.disable_fast_tokenizer)
     strategy.print(model)
@@ -43,7 +68,13 @@ def train(args):
         )
 
     # configure optimizer
-    optim = strategy.create_optimizer(model, lr=args.learning_rate, betas=args.adam_betas, weight_decay=args.l2)
+    optim = strategy.create_optimizer(
+        model,
+        lr=args.learning_rate,
+        betas=args.adam_betas,
+        weight_decay=args.l2,
+        medusa_lr_multiplier=args.medusa_lr_multiplier
+    )
 
     # prepare for data and dataset
     train_data = blending_datasets(
@@ -189,6 +220,21 @@ if __name__ == "__main__":
     parser.add_argument("--gradient_checkpointing_use_reentrant", action="store_true", default=False)
     parser.add_argument("--disable_fast_tokenizer", action="store_true", default=False)
     parser.add_argument("--ds_tensor_parallel_size", type=int, default=1, help="DeepSpeed Tensor parallel size")
+
+    # MEDUSA configs
+    parser.add_argument("--use_medusa", action="store_true", default=False, help="Use MEDUSA heads")
+    parser.add_argument("--medusa_only_heads", action="store_true", default=False)
+    parser.add_argument("--medusa_num_heads", type=int, default=4)
+    parser.add_argument("--medusa_num_layers", type=int, default=1)
+    parser.add_argument("--medusa_heads_coefficient", type=float, default=0.2)
+    parser.add_argument("--medusa_decay_coefficient", type=float, default=0.8)
+    parser.add_argument("--medusa_lr_multiplier", type=float, default=4.0)
+    parser.add_argument(
+        "--medusa_scheduler",
+        type=str,
+        default="constant",
+        choices=["constant", "linear", "sine"]
+    )
 
     # SFT
     parser.add_argument("--max_epochs", type=int, default=2)

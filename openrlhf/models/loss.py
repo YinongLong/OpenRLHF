@@ -1,5 +1,7 @@
 from typing import Optional, Tuple
 
+import math
+
 import torch
 import torch.distributed as dist
 import torch.nn as nn
@@ -68,6 +70,60 @@ class SFTLoss(nn.Module):
             if self.token_level_loss
             else masked_mean(-per_token_logps, loss_mask, dim=-1).mean()
         )
+
+        return loss
+
+
+class MedusaLoss(nn.Module):
+    """
+    SFT loss for multiple decoding heads
+    """
+
+    def __init__(self, medusa_heads_coefficient=0.2, medusa_decay_coefficient=0.8, medusa_scheduler="constant", medusa_only_heads=False):
+        super().__init__()
+        self.medusa_heads_coefficient = medusa_heads_coefficient
+        self.medusa_decay_coefficient = medusa_decay_coefficient
+        self.medusa_scheduler = medusa_scheduler
+        self.medusa_only_heads = medusa_only_heads
+
+    def forward(self, per_token_logps: torch.Tensor, loss_mask: torch.Tensor, global_step: int, max_steps: int) -> torch.Tensor:
+        """
+        Args:
+            per_token_logps (`torch.Tensor`):
+                token logps of multiple decoding heads, shape=[num_heads, batch_size, seq_len]
+            loss_mask (`torch.Tensor`):
+                loss mask, shape=[batch_size, seq_len]
+        """
+        per_token_logps_arr = torch.unbind(per_token_logps)
+        loss = 0
+        for i, per_token_logps in enumerate(per_token_logps_arr):
+            head_loss_mask = loss_mask.detach()
+            head_loss_mask = torch.roll(head_loss_mask, shifts=(-1 * i), dims=1)
+            if i > 0:
+                head_loss_mask[:, -1] = 0
+            head_loss = masked_mean(-per_token_logps, head_loss_mask, dim=None)
+
+            # Compute the coefficient for medusa losses
+            if self.medusa_scheduler == "sine":
+                medusa_scheduler_coefficient = math.sin(global_step / max_steps * math.pi / 2)
+            elif self.medusa_scheduler == "linear":
+                medusa_scheduler_coefficient = global_step / max_steps
+            elif self.medusa_scheduler == "constant":
+                medusa_scheduler_coefficient = 1
+            elif self.medusa_scheduler.startswith("sine"):
+                ratio = float(self.medusa_scheduler.split("_")[1])
+                if (global_step / max_steps) < ratio:
+                    medusa_scheduler_coefficient = math.sin(global_step / max_steps / ratio * math.pi / 2)
+                else:
+                    medusa_scheduler_coefficient = 1
+            else:
+                raise ValueError(f"Invalid medusa_scheduler: {self.medusa_scheduler}. Must be one of 'sine', 'linear', or 'constant'.")
+            # Add decay coefficient to the loss
+            if i == 0:
+                if not self.medusa_only_heads:
+                    loss += head_loss
+            else:
+                loss += head_loss * self.medusa_heads_coefficient * medusa_scheduler_coefficient * self.medusa_decay_coefficient ** i
 
         return loss
 

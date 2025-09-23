@@ -137,7 +137,12 @@ class DeepspeedStrategy(ABC):
             model = model.model
         # Optimizer
         AdamOptimizer = DeepSpeedCPUAdam if self.adam_offload else FusedAdam
-        optim_params = get_optimizer_grouped_parameters(model, kwargs["weight_decay"])
+        optim_params = get_optimizer_grouped_parameters(
+            model,
+            kwargs["weight_decay"],
+            medusa_lr_multiplier=kwargs.get("medusa_lr_multiplier", 1.0),
+            lr=kwargs["lr"]
+        )
         optim = AdamOptimizer(optim_params, **kwargs)
         return optim
 
