@@ -252,9 +252,13 @@ class FuserTrainer(ABC):
                 )
 
                 flag_loss = self.loss_fn(per_token_log_probs, flag_loss_mask[:, :-1])
-                comp_loss = self.loss_fn(per_token_log_probs, comp_loss_mask[:, :-1])
 
-                loss = self.flag_weight * flag_loss + self.comp_weight * comp_loss
+                if comp_loss_mask.sum().item() > 0:
+                    comp_loss = self.loss_fn(per_token_log_probs, comp_loss_mask[:, :-1])
+                    loss = self.flag_weight * flag_loss + self.comp_weight * comp_loss
+                else:
+                    comp_loss = torch.zeros_like(flag_loss)
+                    loss = self.flag_weight * flag_loss
 
                 times += 1
                 weighted_loss_sum += loss.item()

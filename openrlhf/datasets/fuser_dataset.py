@@ -170,7 +170,9 @@ class FuserDataset(Dataset):
         prefix_ids_len = self.prefix_ids_lens[idx]
         flag_ids_len = self.flag_ids_lens[idx]
 
+        # construct loss mask for "yes" or "no"
         flag_loss_mask[0, (prefix_ids_len - 1) : (prefix_ids_len + flag_ids_len - 1)] = 1
+        # if flag is "yes", construct loss mask for the completion
         comp_loss_mask[0, (prefix_ids_len + flag_ids_len - 1) : -1] = 1
         return flag_loss_mask, comp_loss_mask
 
