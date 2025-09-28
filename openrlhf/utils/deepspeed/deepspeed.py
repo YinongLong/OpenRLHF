@@ -140,7 +140,7 @@ class DeepspeedStrategy(ABC):
         optim_params = get_optimizer_grouped_parameters(
             model,
             kwargs["weight_decay"],
-            medusa_lr_multiplier=kwargs.get("medusa_lr_multiplier", 1.0),
+            medusa_lr_multiplier=kwargs.pop("medusa_lr_multiplier", 1.0),
             lr=kwargs["lr"]
         )
         optim = AdamOptimizer(optim_params, **kwargs)
