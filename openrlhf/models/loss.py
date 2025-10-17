@@ -100,7 +100,8 @@ class MedusaLoss(nn.Module):
             head_loss_mask = loss_mask.detach()
             head_loss_mask = torch.roll(head_loss_mask, shifts=(-1 * i), dims=1)
             if i > 0:
-                head_loss_mask[:, -1] = 0
+                head_loss_mask[:, -i:] = 0
+
             head_loss = masked_mean(-per_token_logps, head_loss_mask, dim=None)
 
             # Compute the coefficient for medusa losses
