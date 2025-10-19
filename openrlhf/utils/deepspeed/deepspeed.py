@@ -365,7 +365,8 @@ class DeepspeedStrategy(ABC):
         # save model weights for ZeRO2/3
         model_to_save = self._unwrap_model(model)
         if has_medusa:
-            medusa_heads = model_to_save.pop("medusa_heads")
+            medusa_heads = getattr(model_to_save, "medusa_heads")
+            delattr(model_to_save, "medusa_heads")
 
         # gather parameters
         if self.args.zero_stage > 2 or self.args.ds_tensor_parallel_size > 1:
