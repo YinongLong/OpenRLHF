@@ -354,8 +354,14 @@ class DeepspeedStrategy(ABC):
         unwrapped_model.load_state_dict(state_dict, strict=strict)
 
     def save_model(self, model: nn.Module, tokenizer, output_dir, **kwargs) -> None:
+        has_medusa = hasattr(model, "medusa_conf")
+        medusa_output_dir = os.path.join(output_dir, "medusa_heads")
         if self.is_rank_0():
             os.makedirs(output_dir, exist_ok=True)
+            if has_medusa:
+                os.makedirs(medusa_output_dir, exist_ok=True)
+                model.medusa_conf.to_json_file(os.path.join(medusa_output_dir, "config.json"))
+                medusa_heads = model.model.pop("medusa_heads")
 
         # save model weights for ZeRO2/3
         model_to_save = self._unwrap_model(model)
@@ -404,6 +410,12 @@ class DeepspeedStrategy(ABC):
             model_to_save.config.to_json_file(output_config_file)
             # save tokenizer
             tokenizer.save_pretrained(output_dir)
+            if has_medusa:
+                torch.save(
+                    medusa_heads.state_dict(),
+                    os.path.join(medusa_output_dir, "medusa_lm_head.pt")
+                )
+                setattr(model.model, "medusa_heads", medusa_heads)
 
         del output_state_dict
         # Explicitly release memory

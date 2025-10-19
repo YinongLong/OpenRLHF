@@ -147,23 +147,13 @@ class SFTTrainer(ABC):
                 attention_mask = attention_masks.to(torch.cuda.current_device()).squeeze(1)
                 loss_mask = loss_masks.to(torch.cuda.current_device()).squeeze(1)
 
-                if self.args.use_medusa:
-                    per_token_log_probs, output = self.model(
-                        inputs,
-                        attention_mask=attention_mask,
-                        return_output=True,
-                        return_logprobs=True,
-                        medusa_only_heads=self.args.medusa_only_heads,
-                        ring_attn_group=self.strategy.ring_attn_group,
-                    )
-                else:
-                    per_token_log_probs, output = self.model(
-                        inputs,
-                        attention_mask=attention_mask,
-                        return_output=True,
-                        return_logprobs=True,
-                        ring_attn_group=self.strategy.ring_attn_group,
-                    )
+                per_token_log_probs, output = self.model(
+                    inputs,
+                    attention_mask=attention_mask,
+                    return_output=True,
+                    return_logprobs=True,
+                    ring_attn_group=self.strategy.ring_attn_group,
+                )
 
                 # mixtral
                 if self.aux_loss:
@@ -256,21 +246,12 @@ class SFTTrainer(ABC):
                 attention_mask = attention_masks.to(torch.cuda.current_device()).squeeze(1)
                 loss_mask = loss_masks.to(torch.cuda.current_device()).squeeze(1)
 
-                if self.args.use_medusa:
-                    per_token_log_probs = self.model(
-                        inputs,
-                        attention_mask=attention_mask,
-                        return_logprobs=True,
-                        medusa_only_heads=self.args.medusa_only_heads,
-                        ring_attn_group=self.strategy.ring_attn_group,
-                    )
-                else:
-                    per_token_log_probs = self.model(
-                        inputs,
-                        attention_mask=attention_mask,
-                        return_logprobs=True,
-                        ring_attn_group=self.strategy.ring_attn_group,
-                    )
+                per_token_log_probs = self.model(
+                    inputs,
+                    attention_mask=attention_mask,
+                    return_logprobs=True,
+                    ring_attn_group=self.strategy.ring_attn_group,
+                )
 
                 if self.args.use_medusa:
                     loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], steps, max_steps)

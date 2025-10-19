@@ -34,15 +34,8 @@ def train(args):
             use_liger_kernel=args.use_liger_kernel,
             medusa_num_heads=args.medusa_num_heads,
             medusa_num_layers=args.medusa_num_layers,
+            medusa_only_heads=args.medusa_only_heads
         )
-
-        if args.medusa_only_heads:
-            strategy.print("freeze layers!!!")
-            for param in model.model.parameters():
-                param.requires_grad = False
-            for param in model.model.medusa_head.parameters():
-                param.requires_grad = True
-
     else:
         model = Actor(
             args.pretrain,

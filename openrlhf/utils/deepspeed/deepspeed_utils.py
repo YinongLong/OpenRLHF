@@ -108,7 +108,7 @@ def get_optimizer_grouped_parameters(
     medusa_lr_multiplier=1.0,
     lr=1e-5
 ):
-    medusa_name = "medusa_head"
+    medusa_name = "medusa_heads"
     optimizer_grouped_parameters = [
         {
             "params": [

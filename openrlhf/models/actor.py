@@ -1,4 +1,6 @@
 from typing import Optional
+import types
+import os
 
 import deepspeed
 import torch
@@ -9,7 +11,7 @@ from peft.tuners.lora import LoraLayer
 from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 from transformers.integrations.deepspeed import HfDeepSpeedConfig
 
-from .medusa_utils import add_medusa_heads
+from .medusa_utils import ResBlock, MedusaConfig, medusa_forward
 from .ring_attn_utils import gather_and_pad_tensor, unpad_and_slice_tensor
 from .utils import compute_entropy, log_probs_from_logits
 
@@ -244,7 +246,9 @@ class MedusaActor(Actor):
         packing_samples=False,
         temperature=1.0,
         use_liger_kernel=False,
-        **kwargs,
+        medusa_num_heads=4,
+        medusa_num_layers=1,
+        medusa_only_heads=False
     ) -> None:
         super().__init__(
             pretrain_or_model=pretrain_or_model,
@@ -261,12 +265,48 @@ class MedusaActor(Actor):
             temperature=temperature,
             use_liger_kernel=use_liger_kernel
         )
-        # monkeypatch for adding medusa heads
-        add_medusa_heads(
-            self.model,
-            medusa_num_heads=kwargs.get("medusa_num_heads", 4),
-            medusa_num_layers=kwargs.get("medusa_num_layers", 1)
+
+        # adding medusa heads on top of base model
+        hidden_size = self.model.lm_head.weight.shape[-1]
+        vocab_size = self.model.lm_head.weight.shape[0]
+        medusa_heads_dir = os.path.join(pretrain_or_model, "medusa_heads")
+        if os.path.exists(medusa_heads_dir):
+            self.medusa_conf = MedusaConfig.from_pretrained(medusa_heads_dir)
+        else:
+            self.medusa_conf = MedusaConfig(
+                medusa_num_heads=medusa_num_heads,
+                medusa_num_layers=medusa_num_layers,
+                base_model_name_or_path=pretrain_or_model
+            )
+
+        self.model.medusa_num_heads = self.medusa_conf.medusa_num_heads
+        self.model.medusa_heads = nn.ModuleList(
+            [
+                nn.Sequential(
+                    *([ResBlock(hidden_size), ] * self.medusa_conf.medusa_num_layers),
+                    nn.Linear(hidden_size, vocab_size, bias=False)
+                )
+                for _ in range(self.medusa_conf.medusa_num_heads)
+            ]
         )
+
+        if os.path.exists(medusa_heads_dir):
+            ckpt_file = os.path.join(medusa_heads_dir, "medusa_lm_head.pt")
+            state_dict = torch.load(ckpt_file, map_location="cpu")
+            self.model.medusa_heads.load_state_dict(state_dict)
+        else:
+            for i in range(self.medusa_conf.medusa_num_heads):
+                self.model.medusa_heads[i][-1].weight.data[:] = self.model.lm_head.weight.data[:]
+
+        self.model.medusa_heads.to(self.model.dtype).to(self.model.device)
+
+        self.medusa_onlye_heads = medusa_only_heads
+        if medusa_only_heads:
+            for param in self.model.parameters():
+                param.requires_grad = False
+            for param in self.model.medusa_heads.parameters():
+                param.requires_grad = True
+        self.model.forward = types.MethodType(medusa_forward, self.model)
 
     def forward(
         self,
@@ -274,7 +314,6 @@ class MedusaActor(Actor):
         attention_mask: Optional[torch.Tensor] = None,
         return_output=False,
         return_logprobs=False,
-        medusa_only_heads=False,
         ring_attn_group: Optional[dist.ProcessGroup] = None
     ) -> torch.Tensor:
         """Returns action log probs"""
@@ -293,7 +332,7 @@ class MedusaActor(Actor):
 
         # 1. pad [num_heads, batch_size, seq_len, vocab_size]
         # 2. unpad [num_heads, 1, all_seq, vocab_size]
-        output = self.model(sequences, attention_mask=foward_attention_mask, position_ids=position_ids, medusa_only_heads=medusa_only_heads)
+        output = self.model(sequences, attention_mask=foward_attention_mask, position_ids=position_ids, medusa_only_heads=self.medusa_onlye_heads)
         # https://github.com/OpenRLHF/OpenRLHF/pull/634
         output["logits"] = output["logits"].to(torch.float32)
 

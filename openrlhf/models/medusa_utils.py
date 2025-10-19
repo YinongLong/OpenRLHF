@@ -63,6 +63,47 @@ class ResBlock(nn.Module):
         return x + self.act(self.linear(x))
 
 
+def medusa_forward(
+    self,
+    sequences: torch.LongTensor,
+    attention_mask: Optional[torch.Tensor] = None,
+    position_ids: Optional[torch.LongTensor] = None,
+    medusa_only_heads: bool = False):
+    """Forward pass of the MedusaModel.
+    Returns:
+        torch.Tensor: A tensor containing predictions from all Medusa heads.
+        (Optional) Original predictions from the base model's LM head.
+    """
+    # Pass input through the base model
+    if medusa_only_heads:
+        with torch.no_grad():
+            outputs = self.model(
+                sequences,
+                attention_mask=attention_mask,
+                position_ids=position_ids
+            )
+            hidden_states = outputs[0]
+            medusa_logits = [self.lm_head(hidden_states), ]
+    else:
+        outputs = self.model(
+            sequences,
+            attention_mask=attention_mask,
+            position_ids=position_ids
+        )
+        hidden_states = outputs[0]
+        medusa_logits = [self.lm_head(hidden_states), ]
+
+    for i in range(self.medusa_num_heads):
+        medusa_logits.append(self.medusa_head[i](hidden_states))
+
+    medusa_logits = torch.stack(medusa_logits, dim=0)
+
+    return CausalLMOutputWithPast(
+        loss=None,
+        logits=medusa_logits
+    )
+
+
 def add_medusa_heads(self, medusa_num_heads=4, medusa_num_layers=1):
     """
     Args:
