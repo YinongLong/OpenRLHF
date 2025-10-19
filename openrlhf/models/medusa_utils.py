@@ -94,7 +94,7 @@ def medusa_forward(
         medusa_logits = [self.lm_head(hidden_states), ]
 
     for i in range(self.medusa_num_heads):
-        medusa_logits.append(self.medusa_head[i](hidden_states))
+        medusa_logits.append(self.medusa_heads[i](hidden_states))
 
     medusa_logits = torch.stack(medusa_logits, dim=0)
 
