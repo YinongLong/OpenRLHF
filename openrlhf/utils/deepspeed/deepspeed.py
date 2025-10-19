@@ -361,10 +361,11 @@ class DeepspeedStrategy(ABC):
             if has_medusa:
                 os.makedirs(medusa_output_dir, exist_ok=True)
                 model.medusa_conf.to_json_file(os.path.join(medusa_output_dir, "config.json"))
-                medusa_heads = model.model.pop("medusa_heads")
 
         # save model weights for ZeRO2/3
         model_to_save = self._unwrap_model(model)
+        if has_medusa:
+            medusa_heads = model_to_save.pop("medusa_heads")
 
         # gather parameters
         if self.args.zero_stage > 2 or self.args.ds_tensor_parallel_size > 1:
@@ -415,7 +416,8 @@ class DeepspeedStrategy(ABC):
                     medusa_heads.state_dict(),
                     os.path.join(medusa_output_dir, "medusa_lm_head.pt")
                 )
-                setattr(model.model, "medusa_heads", medusa_heads)
+        if has_medusa:
+            setattr(model_to_save, "medusa_heads", medusa_heads)
 
         del output_state_dict
         # Explicitly release memory
