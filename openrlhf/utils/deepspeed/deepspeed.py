@@ -381,6 +381,9 @@ class DeepspeedStrategy(ABC):
             if has_medusa:
                 medusa_heads = getattr(model_to_save, "medusa_heads")
                 delattr(model_to_save, "medusa_heads")
+                medusa_keys = [key for key in output_state_dict.keys() if "medusa_heads" in key]
+                for key in medusa_keys:
+                    output_state_dict.pop(key, None)
 
             state_dict_keys = set(model_to_save.state_dict().keys())
             output_state_dict_keys = set(output_state_dict.keys())
