@@ -96,6 +96,8 @@ class MedusaLoss(nn.Module):
         """
         per_token_logps_arr = torch.unbind(per_token_logps)
         loss = 0
+
+        all_heads_loss = {}
         for i, per_token_logps in enumerate(per_token_logps_arr):
             head_loss_mask = loss_mask.detach()
             head_loss_mask = torch.roll(head_loss_mask, shifts=(-1 * i), dims=1)
@@ -103,6 +105,7 @@ class MedusaLoss(nn.Module):
                 head_loss_mask[:, -i:] = 0
 
             head_loss = masked_mean(-per_token_logps, head_loss_mask, dim=None)
+            all_heads_loss[i] = head_loss.detach()
 
             # Compute the coefficient for medusa losses
             if self.medusa_scheduler == "sine":
@@ -126,7 +129,7 @@ class MedusaLoss(nn.Module):
             else:
                 loss += head_loss * self.medusa_heads_coefficient * medusa_scheduler_coefficient * self.medusa_decay_coefficient ** i
 
-        return loss
+        return loss, all_heads_loss
 
 
 class SFTLossWithChannelMask(nn.Module):

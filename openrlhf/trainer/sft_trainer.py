@@ -128,6 +128,7 @@ class SFTTrainer(ABC):
             disable=not self.strategy.is_rank_0(),
         )
         loss_sum = 0
+        all_heads_loss_sum = {}
         for epoch in range(start_epoch, self.epochs):
             if isinstance(self.train_dataloader.sampler, DistributedSampler):
                 self.train_dataloader.sampler.set_epoch(
@@ -162,7 +163,7 @@ class SFTTrainer(ABC):
                     aux_loss = 0
 
                 if self.args.use_medusa:
-                    gpt_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], step // self.strategy.accumulated_gradient, max_steps)
+                    gpt_loss, all_heads_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], step // self.strategy.accumulated_gradient, max_steps)
                 else:
                     gpt_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1])
 
@@ -175,6 +176,15 @@ class SFTTrainer(ABC):
                     "gpt_loss": gpt_loss.item(),
                     "lr": self.scheduler.get_last_lr()[0],
                 }
+
+                if self.args.use_medusa:
+                    for head_idx, head_loss in all_heads_loss.items():
+                        head_name = f"head_{head_idx}_loss"
+                        if head_name not in all_heads_loss_sum:
+                            all_heads_loss_sum[head_name] = 0
+                        all_heads_loss_sum[head_name] += head_loss.item()
+                        logs_dict[head_name] = head_loss.item()
+
                 if self.aux_loss:
                     logs_dict["aux_loss"] = aux_loss.item()
 
@@ -187,6 +197,11 @@ class SFTTrainer(ABC):
                 if step % self.strategy.accumulated_gradient == 0:
                     logs_dict["loss_mean"] = loss_sum / self.strategy.accumulated_gradient
                     loss_sum = 0
+                    if self.args.use_medusa:
+                        for head_name, head_loss_sum in all_heads_loss_sum.items():
+                            logs_dict[f"{head_name}_mean"] = head_loss_sum / self.strategy.accumulated_gradient
+                        all_heads_loss_sum = {}
+
                     global_step = step // self.strategy.accumulated_gradient
                     client_states = {"consumed_samples": global_step * args.train_batch_size}
                     self.save_logs_and_checkpoints(args, global_step, max_steps, step_bar, logs_dict, client_states)
@@ -235,6 +250,7 @@ class SFTTrainer(ABC):
         self.model.eval()
         with torch.no_grad():
             loss_sum = 0
+            all_heads_loss_sum = {}
             step_bar = tqdm(
                 range(eval_dataloader.__len__()),
                 desc="Eval stage of steps %d" % steps,
@@ -254,13 +270,21 @@ class SFTTrainer(ABC):
                 )
 
                 if self.args.use_medusa:
-                    loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], steps, max_steps)
+                    loss, all_heads_loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1], steps, max_steps)
                 else:
                     loss = self.loss_fn(per_token_log_probs, loss_mask[:, :-1])
 
                 times += 1
                 loss_sum += loss.item()
                 bar_dict = {"eval gpt_loss": loss_sum / times}
+
+                if self.args.use_medusa:
+                    for head_idx, head_loss in all_heads_loss.items():
+                        head_name = f"eval head_{head_idx}_loss"
+                        if head_name not in all_heads_loss_sum:
+                            all_heads_loss_sum[head_name] = 0
+                        all_heads_loss_sum[head_name] += head_loss.item()
+                        bar_dict[head_name] = all_heads_loss_sum[head_name] / times
 
                 step_bar.update()
                 logs = self.strategy.all_reduce(bar_dict)

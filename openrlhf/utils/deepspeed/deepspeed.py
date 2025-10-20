@@ -364,9 +364,6 @@ class DeepspeedStrategy(ABC):
 
         # save model weights for ZeRO2/3
         model_to_save = self._unwrap_model(model)
-        if has_medusa:
-            medusa_heads = getattr(model_to_save, "medusa_heads")
-            delattr(model_to_save, "medusa_heads")
 
         # gather parameters
         if self.args.zero_stage > 2 or self.args.ds_tensor_parallel_size > 1:
@@ -381,6 +378,10 @@ class DeepspeedStrategy(ABC):
             output_state_dict = clone_tensors_for_torch_save(model_to_save.state_dict())
 
         if self.is_rank_0():
+            if has_medusa:
+                medusa_heads = getattr(model_to_save, "medusa_heads")
+                delattr(model_to_save, "medusa_heads")
+
             state_dict_keys = set(model_to_save.state_dict().keys())
             output_state_dict_keys = set(output_state_dict.keys())
 
@@ -417,8 +418,7 @@ class DeepspeedStrategy(ABC):
                     medusa_heads.state_dict(),
                     os.path.join(medusa_output_dir, "medusa_lm_head.pt")
                 )
-        if has_medusa:
-            setattr(model_to_save, "medusa_heads", medusa_heads)
+                setattr(model_to_save, "medusa_heads", medusa_heads)
 
         del output_state_dict
         # Explicitly release memory

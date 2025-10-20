@@ -271,7 +271,9 @@ class MedusaActor(Actor):
         vocab_size = self.model.lm_head.weight.shape[0]
         medusa_heads_dir = os.path.join(pretrain_or_model, "medusa_heads")
         if os.path.exists(medusa_heads_dir):
-            self.medusa_conf = MedusaConfig.from_pretrained(medusa_heads_dir)
+            self.medusa_conf = MedusaConfig.from_json_file(
+                os.path.join(medusa_heads_dir, "config.json")
+            )
         else:
             self.medusa_conf = MedusaConfig(
                 medusa_num_heads=medusa_num_heads,
