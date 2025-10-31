@@ -32,6 +32,7 @@ def train(args):
             ds_config=strategy.get_ds_train_config(is_actor=True),
             packing_samples=args.packing_samples,
             use_liger_kernel=args.use_liger_kernel,
+            use_neftune=args.use_neftune,
             medusa_num_heads=args.medusa_num_heads,
             medusa_num_layers=args.medusa_num_layers,
             medusa_only_heads=args.medusa_only_heads
@@ -49,6 +50,7 @@ def train(args):
             ds_config=strategy.get_ds_train_config(is_actor=True),
             packing_samples=args.packing_samples,
             use_liger_kernel=args.use_liger_kernel,
+            use_neftune=args.use_neftune
         )
     # configure tokenizer
     tokenizer = get_tokenizer(args.pretrain, model.model, "right", strategy, use_fast=not args.disable_fast_tokenizer)
@@ -228,6 +230,9 @@ if __name__ == "__main__":
         default="constant",
         choices=["constant", "linear", "sine"]
     )
+
+    # Support NEFTune's trick
+    parser.add_argument("--use_neftune", action="store_true", default=False, help="Use NEFTune's trick")
 
     # SFT
     parser.add_argument("--max_epochs", type=int, default=2)

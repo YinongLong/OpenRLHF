@@ -12,6 +12,7 @@ from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 from transformers.integrations.deepspeed import HfDeepSpeedConfig
 
 from .medusa_utils import ResBlock, MedusaConfig, medusa_forward
+from .neftune_utils import neftune_forward
 from .ring_attn_utils import gather_and_pad_tensor, unpad_and_slice_tensor
 from .utils import compute_entropy, log_probs_from_logits
 
@@ -139,6 +140,10 @@ class Actor(nn.Module):
 
             # packing samples using Flash Attention 2
             self.packing_samples = packing_samples
+
+            use_neftune = kwargs.get("use_neftune", False)
+            if use_neftune:
+                self.model.model.forward = types.MethodType(neftune_forward, self.model.model)
         else:
             self.model = pretrain_or_model
 
@@ -246,6 +251,7 @@ class MedusaActor(Actor):
         packing_samples=False,
         temperature=1.0,
         use_liger_kernel=False,
+        use_neftune=False,
         medusa_num_heads=4,
         medusa_num_layers=1,
         medusa_only_heads=False
@@ -263,7 +269,8 @@ class MedusaActor(Actor):
             device_map=device_map,
             packing_samples=packing_samples,
             temperature=temperature,
-            use_liger_kernel=use_liger_kernel
+            use_liger_kernel=use_liger_kernel,
+            use_neftune=use_neftune
         )
 
         # adding medusa heads on top of base model
