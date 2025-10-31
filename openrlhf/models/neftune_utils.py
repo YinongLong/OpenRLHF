@@ -25,19 +25,20 @@ def neftune_forward(
     if inputs_embeds is None:
         inputs_embeds = self.embed_tokens(input_ids)
 
-    seq_length, emb_dim = inputs_embeds.shape[1:]
+    if self.training:
+        seq_length, emb_dim = inputs_embeds.shape[1:]
 
-    alpha = 5.0
-    noise_vector = (
-        torch.rand(
-            *inputs_embeds.shape,
-            dtype=inputs_embeds.dtype,
-            device=inputs_embeds.device,
-            requires_grad=False
-        ) - 0.5
-    ) * 2 * alpha * (seq_length * emb_dim) ** -0.5
+        alpha = 5.0
+        noise_vector = (
+            torch.rand(
+                *inputs_embeds.shape,
+                dtype=inputs_embeds.dtype,
+                device=inputs_embeds.device,
+                requires_grad=False
+            ) - 0.5
+        ) * 2 * alpha * (seq_length * emb_dim) ** -0.5
 
-    inputs_embeds = inputs_embeds + noise_vector
+        inputs_embeds = inputs_embeds + noise_vector
 
     if use_cache and past_key_values is None:
         past_key_values = DynamicCache(config=self.config)
