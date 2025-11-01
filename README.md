@@ -43,6 +43,9 @@ OpenRLHF is the first easy-to-use, high-performance open-source RLHF framework b
 More details are in [Slides](https://docs.google.com/presentation/d/1JRhB1d7csofx0PIZBmfyBdMluxNd5JLPpUHrrvVhGnk/edit?usp=sharing) | [Technical Report](https://www.researchgate.net/publication/393414548_OpenRLHF_An_Easy-to-use_Scalable_and_High-performance_RLHF_Framework) | [Documents](https://openrlhf.readthedocs.io/)
 
 ## News
+- [2025/11] [NeMo Gym](https://github.com/NVIDIA-NeMo/Gym) OpenRLHF now supports integration with NeMo-Gym for advanced agent-based RLHF training with external evaluation environments.
+- [2025/10] [ScaleRL](https://arxiv.org/abs/2510.13786) validates the effectiveness of REINFORCE++-baseline in large-scale training scenarios. Releases [REINFORCE++ slides](https://docs.google.com/presentation/d/1stieP_3PM1z4Hq1YWR3GywFkxcHEAlstXMaS23KlGN4)
+- [2025/8] [ProRL V2](https://hijkzzz.notion.site/prorl-v2) uses REINFORCE++-baseline to train a state-of-the-art 1.5B reasoning model and releases the blog post [REINFORCE++-baseline is all you need in RLVR](https://medium.com/@janhu9527/reinforce-baseline-is-all-you-need-in-rlvr-f5406930aa85).
 - [2025/6] [Magistral](https://mistral.ai/static/research/magistral.pdf) uses the method quite similar to REINFORCE++-baseline to train the reasoning models.
 - [2025/5] [MARTI](https://github.com/TsinghuaC3I/MARTI) has been released as a fork of OpenRLHF. It is designed to train LLM-based multi-agent systems using RL, by integrating centralized multi-agent interactions with distributed policy training.
 - [2025/5] OpenRLHF 0.8.0 supports [Async Pipeline RLHF](./examples/scripts/train_reinforce_baseline_llama_ray_async.sh) (`--async_train`) and [Async Agent RLHF](./examples/scripts/train_reinforce_baseline_llama_ray_agent_async.sh)(`--agent_func_path`) with redesigned class-based Agent API
@@ -63,6 +66,7 @@ More details are in [Slides](https://docs.google.com/presentation/d/1JRhB1d7csof
 - Distributed [PPO](./examples/scripts/train_ppo_llama_ray.sh) and [REINFORCE++/REINFORCE++-baseline/GRPO/RLOO](./examples/scripts/train_reinforce_llama_ray_hybrid_engine.sh) implementations based on Ray.  
 - Support Ray-based [PPO](./examples/scripts/train_ppo_llama_ray_hybrid_engine.sh) and [REINFORCE++/REINFORCE++-baseline/GRPO/RLOO](./examples/scripts/train_reinforce_llama_ray_hybrid_engine.sh) using Hybrid Engine  (`--colocate_all_models`, `--vllm_enable_sleep` and `--vllm_gpu_memory_utilization 0.5`)
 - [Ray-based Reinforced Finetuning](./examples/scripts/train_ppo_llama_with_reward_fn.sh)
+- Integration with [NeMo Gym](./examples/scripts/train_reinforce_nemogym.sh) for agent-based RLHF with external evaluation environments (`--agent_func_path` with NeMo Gym integration)
 - Integration with vLLM for accelerated generation in RLHF tasks (`--vllm_num_engines`).  
 - Support RL Dynamic Sampling from DAPO(`--dynamic_filtering` and `--dynamic_filtering_reward_range`)
 - Support [DeepSpeed AutoTP training](./examples/scripts/train_sft_llama_tensor_parallelism.sh) (`--ds_tensor_parallel_size`)
@@ -75,7 +79,7 @@ More details are in [Slides](https://docs.google.com/presentation/d/1JRhB1d7csof
 - Integration of [Process Reward Model (PRM)](./examples/scripts/train_prm_mistral.sh).  
 - Packing of training samples for SFT, DPO, RM, PRM, and PPO (`--packing_samples`).  
 - Support for [Mixture of Experts (MoE)](./examples/test_scripts/train_sft_mixtral_lora.sh) (`--aux_loss_coef`).  
-- Integration of FlashAttention2 (`--flash_attn`).  
+- Integration of FlashAttention (`--attn_implementation`).  
 - Support for QLoRA (`--load_in_4bit`) and [LoRA](./examples/scripts/train_sft_mixtral_lora.sh) (`--lora_rank`, `--target_modules`).  
 - Compatibility with HuggingFace's `tokenizer.apply_chat_template` for datasets (`--apply_chat_template` and `--input_key`).  
 - Logging support with Wandb (`--use_wandb`) and TensorBoard (`--use_tensorboard`).  
@@ -96,7 +100,7 @@ sudo pip uninstall xgboost transformer_engine flash_attn pynvml -y
 # pip install
 pip install openrlhf
 
-# If you want to use vLLM acceleration (Install vLLM 0.10.0)
+# If you want to use vLLM acceleration (Install vLLM 0.11.0)
 pip install openrlhf[vllm]
 # latest vLLM is also supported
 pip install openrlhf[vllm_latest]
@@ -113,7 +117,7 @@ pip install -e .
 ```
 
 > [!NOTE]
->We recommend using vLLM 0.10.0 or higher.
+>We recommend using vLLM 0.11.0 or higher.
 >We also provided the [Dockerfiles for vLLM](./dockerfile/) and [One-Click Installation Script of Nvidia-Docker](./examples/scripts/nvidia_docker_install.sh).
 
 ### Prepare Datasets
@@ -185,7 +189,6 @@ deepspeed --module openrlhf.cli.train_sft \
    --max_epochs 1 \
    --packing_samples \
    --bf16 \
-   --flash_attn \
    --learning_rate 5e-6 \
    --gradient_checkpointing \
    --use_wandb {wandb_token}
@@ -207,7 +210,7 @@ deepspeed --module openrlhf.cli.train_sft \
 ```
 
 > [!NOTE]
-> OpenRLHF SFT/DPO/RewardModel/PPO trainers support `--packing_samples` [based on `--flash_attn`](https://github.com/MeetKai/functionary/tree/main/functionary/train/packing)
+> OpenRLHF SFT/DPO/RewardModel/PPO trainers support `--packing_samples` [based on `flash_attention`](https://github.com/MeetKai/functionary/tree/main/functionary/train/packing)
 
 
 ### Reward Model Training
@@ -229,7 +232,6 @@ deepspeed --module openrlhf.cli.train_rm \
    --apply_chat_template \
    --chosen_key chosen \
    --rejected_key rejected \
-   --flash_attn \
    --packing_samples \
    --gradient_checkpointing \
    --use_wandb {wandb_token}
@@ -325,8 +327,7 @@ ray job submit --address="http://127.0.0.1:8265" \
 > [!NOTE]
 > RLOO and REINFORCE++-baseline in OPENRLHF are a modification based on REINFORCE++:
 > - REINFORCE++ integrates key optimization techniques from PPO (such as advantage normalization and PPO-clip loss) into REINFORCE while eliminating the need for a critic network.
-> - REINFORCE++-baseline uses the `mean reward of multiple samples from the same prompt` as the baseline to reshape the rewards, therefore, under the RLVR setting, the
-reward function is not very sensitive whether it is 0/1 or -1/1, then apply the global advantage normalization in REINFORCE++.
+> - REINFORCE++-baseline uses the `mean reward of multiple samples from the same prompt` as the baseline to reshape the rewards, therefore, under the RLVR setting, the algorithm insensitive to reward patterns such as 0 (incorrect) / 1 (correct) / -0.5 (format reward) or -1 (incorrect) / 1 (correct) / -0.5 (format reward).
 > - RLOO in OpenRLHF modifies the original version by incorporating the `per-token KL reward` and utilizing the `PPO-clip loss`.
 > - Dr. GRPO remove the local group normalization `/std` in GRPO.
 
