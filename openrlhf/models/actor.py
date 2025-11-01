@@ -240,7 +240,7 @@ class MedusaActor(Actor):
     def __init__(
         self,
         pretrain_or_model,
-        use_flash_attention_2=False,
+        attn_implementation="flash_attention_2",
         bf16=True,
         load_in_4bit=False,
         lora_rank=0,
@@ -259,7 +259,7 @@ class MedusaActor(Actor):
     ) -> None:
         super().__init__(
             pretrain_or_model=pretrain_or_model,
-            use_flash_attention_2=use_flash_attention_2,
+            attn_implementation=attn_implementation,
             bf16=bf16,
             load_in_4bit=load_in_4bit,
             lora_rank=lora_rank,
