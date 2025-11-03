@@ -25,19 +25,31 @@ def neftune_forward(
     if inputs_embeds is None:
         inputs_embeds = self.embed_tokens(input_ids)
 
-    if self.training:
-        seq_length, emb_dim = inputs_embeds.shape[1:]
-
+    if self.training and (position_ids is not None):
         alpha = 5.0
-        noise_vector = (
-            torch.rand(
-                *inputs_embeds.shape,
-                dtype=inputs_embeds.dtype,
-                device=inputs_embeds.device,
-                requires_grad=False
-            ) - 0.5
-        ) * 2 * alpha * (seq_length * emb_dim) ** -0.5
+        num_rows, num_cols = position_ids.shape
+        emb_dim = inputs_embeds.shape[-1]
 
+        noise_vector = (torch.rand(
+            num_rows, num_cols, dtype=inputs_embeds.dtype, requires_grad=False
+        ) - 0.5) * 2 * alpha
+
+        pos_diff = position_ids.detach()[:, 1:] - position_ids.detach()[:, :-1]
+        for i in range(num_rows):
+            pre_pos = 0
+            seq_len = 1
+            for j in range(num_cols - 1):
+                if pos_diff[i, j].item() == 1:
+                    seq_len += 1
+                else:
+                    scaling_value = (seq_len * emb_dim) ** -0.5
+                    noise_vector[i, pre_pos:(pre_pos + seq_len)].mul_(scaling_value)
+                    pre_pos += seq_len
+                    seq_len = 1
+            else:
+                scaling_value = (seq_len * emb_dim) ** -0.5
+                noise_vector[i, pre_pos:(pre_pos + seq_len)].mul_(scaling_value)
+        noise_vector = noise_vector.to(dtype=inputs_embeds.dtype, device=inputs_embeds.device)
         inputs_embeds = inputs_embeds + noise_vector
 
     if use_cache and past_key_values is None:
