@@ -31,7 +31,7 @@ def neftune_forward(
         emb_dim = inputs_embeds.shape[-1]
 
         noise_vector = (torch.rand(
-            num_rows, num_cols, dtype=inputs_embeds.dtype, requires_grad=False
+            num_rows, num_cols, emb_dim, dtype=inputs_embeds.dtype, requires_grad=False
         ) - 0.5) * 2 * alpha
 
         pos_diff = position_ids.detach()[:, 1:] - position_ids.detach()[:, :-1]
@@ -43,12 +43,12 @@ def neftune_forward(
                     seq_len += 1
                 else:
                     scaling_value = (seq_len * emb_dim) ** -0.5
-                    noise_vector[i, pre_pos:(pre_pos + seq_len)].mul_(scaling_value)
+                    noise_vector[i, pre_pos:(pre_pos + seq_len), :].mul_(scaling_value)
                     pre_pos += seq_len
                     seq_len = 1
             else:
                 scaling_value = (seq_len * emb_dim) ** -0.5
-                noise_vector[i, pre_pos:(pre_pos + seq_len)].mul_(scaling_value)
+                noise_vector[i, pre_pos:(pre_pos + seq_len), :].mul_(scaling_value)
         noise_vector = noise_vector.to(dtype=inputs_embeds.dtype, device=inputs_embeds.device)
         inputs_embeds = inputs_embeds + noise_vector
 
